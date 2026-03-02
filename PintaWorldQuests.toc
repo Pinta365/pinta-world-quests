@@ -1,0 +1,23 @@
+## Interface: 120001
+## Name: PintaWorldQuests
+## Title: |cff45D388Pinta World Quests|r
+## Notes: World quest tracker with time remaining, reward info, and map overlay.
+## Author: Pinta365@Github
+## Version: 0.0.1
+## SavedVariables: PintaWorldQuestsDB
+## X-Curse-Project-ID: 1171007
+## X-Wago-ID: RNL9Y86o
+## IconTexture: Interface\AddOns\PintaWorldQuests\Textures\pinta
+## Category: Map
+## Category-deDE: Karte
+## Category-esES: Mapa
+## Category-esMX: Mapa
+## Category-frFR: Carte
+## Category-itIT: Mappa
+## Category-koKR: 지도
+## Category-ptBR: Mapa
+## Category-ruRU: Карта
+## Category-zhCN: 地图
+## Category-zhTW: 地圖
+
+embeds.xml
