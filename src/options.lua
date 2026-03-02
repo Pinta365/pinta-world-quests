@@ -32,6 +32,16 @@ local function initOptionsPanel()
         if AddonTable.refreshMapPanel then AddonTable.refreshMapPanel() end
     end)
     optionsPanel.compactCheckbox = compactCheckbox
+    yOffset = yOffset - 30
+
+    local extendedTooltipCheckbox = CreateFrame("CheckButton", nil, optionsPanel, "InterfaceOptionsCheckButtonTemplate")
+    extendedTooltipCheckbox:SetPoint("topleft", 16, yOffset)
+    extendedTooltipCheckbox.Text:SetText("Extended tooltips (objectives + item stats)")
+    extendedTooltipCheckbox.Text:SetFontObject("GameFontHighlightSmall")
+    extendedTooltipCheckbox:SetScript("OnClick", function(self)
+        PintaWorldQuestsDB.extendedTooltips = self:GetChecked()
+    end)
+    optionsPanel.extendedTooltipCheckbox = extendedTooltipCheckbox
     yOffset = yOffset - 50
 
     local scaleLabel = optionsPanel:CreateFontString(nil, "overlay", "GameFontHighlightSmall")
@@ -140,6 +150,9 @@ local function initOptionsPanel()
         end
         if optionsPanel.compactCheckbox then
             optionsPanel.compactCheckbox:SetChecked(PintaWorldQuestsDB.compactMode == true)
+        end
+        if optionsPanel.extendedTooltipCheckbox then
+            optionsPanel.extendedTooltipCheckbox:SetChecked(PintaWorldQuestsDB.extendedTooltips == true)
         end
         if optionsPanel.rightSideCheckbox then
             optionsPanel.rightSideCheckbox:SetChecked(PintaWorldQuestsDB.mapPanelSide == "right")

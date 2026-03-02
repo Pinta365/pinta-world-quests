@@ -2,11 +2,12 @@
 
 local addonName, AddonTable = ...
 
-local FRAME_WIDTH   = 280
-local ROW_HEIGHT    = 30    -- verbose mode
-local COMPACT_ROW_H = 22    -- compact mode
-local VISIBLE_ROWS  = 14
-local HEADER_HEIGHT = 26
+local FRAME_WIDTH        = 280
+local ROW_HEIGHT         = 30    -- verbose mode
+local COMPACT_ROW_H      = 22    -- compact mode (unused, reserved)
+local MAP_COMPACT_ITEM_H = 38    -- compact map overlay: icon + time stacked
+local VISIBLE_ROWS       = 14
+local HEADER_HEIGHT      = 26
 
 -- ── Time formatting ───────────────────────────────────────────────────────────
 
@@ -110,40 +111,222 @@ end
 
 -- ── Tooltip ───────────────────────────────────────────────────────────────────
 
+-- Formats a copper amount as "Xg Ys Zc".
+local function formatMoney(copper)
+    local parts  = {}
+    local gold   = math.floor(copper / 10000)
+    local silver = math.floor((copper % 10000) / 100)
+    local cop    = copper % 100
+    if gold   > 0 then parts[#parts + 1] = gold   .. "g" end
+    if silver > 0 then parts[#parts + 1] = silver .. "s" end
+    if cop    > 0 or #parts == 0 then parts[#parts + 1] = cop .. "c" end
+    return table.concat(parts, " ")
+end
+
+-- ── Custom tooltip frame (never touches GameTooltip to avoid taint) ───────────
+-- Any call to GameTooltip:AddLine from addon code taints GameTooltip's internal
+-- EmbeddedItemTooltip frame size, causing arithmetic errors in TaskPOI_OnEnter.
+
+local CTTIP_W      = 310
+local CTTIP_LINE_H = 16   -- minimum line advance; actual uses GetStringHeight
+local CTTIP_PAD_X  = 10
+local CTTIP_PAD_Y  = 8
+
+local cttipFrame
+local cttipFonts  = {}
+local cttipN      = 0
+local cttipY      = 0    -- accumulated y offset (positive, subtracted when anchoring)
+
+local function cttipEnsure()
+    if cttipFrame then return end
+    cttipFrame = CreateFrame("Frame", "PintaWQTooltip", UIParent, "BackdropTemplate")
+    cttipFrame:SetFrameStrata("TOOLTIP")
+    cttipFrame:SetFrameLevel(100)
+    cttipFrame:SetBackdrop({
+        bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    cttipFrame:SetBackdropColor(0.09, 0.09, 0.09, 0.95)
+    cttipFrame:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.9)
+    cttipFrame:Hide()
+end
+
+local function cttipReset()
+    cttipN = 0
+    cttipY = CTTIP_PAD_Y
+    for _, fs in ipairs(cttipFonts) do fs:Hide() end
+end
+
+local function cttipSep()
+    cttipY = cttipY + 5
+end
+
+local function cttipLine(text, r, g, b)
+    cttipEnsure()
+    cttipN = cttipN + 1
+    local fs = cttipFonts[cttipN]
+    if not fs then
+        fs = cttipFrame:CreateFontString(nil, "overlay", "GameFontNormalSmall")
+        fs:SetWidth(CTTIP_W - CTTIP_PAD_X * 2)
+        fs:SetJustifyH("LEFT")
+        fs:SetWordWrap(true)
+        cttipFonts[cttipN] = fs
+    end
+    fs:ClearAllPoints()
+    fs:SetPoint("TOPLEFT", cttipFrame, "TOPLEFT", CTTIP_PAD_X, -cttipY)
+    fs:SetText(text or "")
+    fs:SetTextColor(r or 1, g or 1, b or 1)
+    fs:Show()
+    local h = fs:GetStringHeight()
+    cttipY = cttipY + math.max(h, CTTIP_LINE_H) + 2
+end
+
+local function cttipShow(anchor)
+    cttipEnsure()
+    cttipFrame:SetSize(CTTIP_W, cttipY + CTTIP_PAD_Y)
+    cttipFrame:ClearAllPoints()
+    local right = anchor:GetRight()
+    if right and (right + CTTIP_W + 8) > GetScreenWidth() then
+        cttipFrame:SetPoint("TOPRIGHT", anchor, "TOPLEFT", -4, 0)
+    else
+        cttipFrame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)
+    end
+    cttipFrame:Show()
+end
+
+local function cttipHide()
+    if cttipFrame then cttipFrame:Hide() end
+end
+
 local function showRowTooltip(row)
     if not row.questID then return end
     local entry = AddonTable.questCache[row.questID]
     if not entry then return end
 
-    GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-    GameTooltip:ClearLines()
-    -- Pre-set width in addon (tainted) context so EmbeddedItemTooltip_UpdateSize's
-    -- arithmetic on GetWidth() operates on a tainted value rather than a "secret"
-    -- (secure-context) value, which would otherwise error.
-    GameTooltip:SetWidth(300)
+    local extended = PintaWorldQuestsDB and PintaWorldQuestsDB.extendedTooltips
 
-    -- Plain table proxy: GameTooltip_AddQuest only reads .questID/.worldQuest/
-    -- .questRewardTooltipStyle — no frame methods needed, no frame taint.
-    local proxy = {
-        questID                  = row.questID,
-        worldQuest               = true,
-        questRewardTooltipStyle  = TOOLTIP_QUEST_REWARDS_STYLE_WORLD_QUEST,
-    }
-    local ok = pcall(GameTooltip_AddQuest, proxy)
+    cttipReset()
 
-    if not ok then
-        -- Taint still occurred somehow — fall back to text-only reward info.
-        GameTooltip:ClearLines()
-        local r, g, b = getStripeColor(row.questID)
-        GameTooltip:AddLine(entry.title or "", r, g, b, true)
-        if entry.isElite then GameTooltip:AddLine("Elite", 1, 0.5, 0) end
-        local sub = getRewardSubtitle(row.questID)
-        if sub ~= "" then GameTooltip:AddLine(sub, 0.8, 0.8, 0.8) end
+    -- Title (quality coloured) + elite marker
+    local r = entry.stripeR or 0.9
+    local g = entry.stripeG or 0.9
+    local b = entry.stripeB or 0.9
+    local titleLine = entry.title or "World Quest"
+    if entry.isElite then titleLine = titleLine .. "  \226\152\133 Elite" end
+    cttipLine(titleLine, r, g, b)
+
+    if extended then
+        -- ── Objectives ────────────────────────────────────────────────
+        local objs = C_QuestLog.GetQuestObjectives and C_QuestLog.GetQuestObjectives(entry.questID)
+        if objs and #objs > 0 then
+            cttipSep()
+            for _, obj in ipairs(objs) do
+                local cr = obj.finished and 0.4 or 0.75
+                cttipLine(obj.text or "", cr, cr, cr)
+            end
+        end
+
+        -- ── Rewards ───────────────────────────────────────────────────
+        if HaveQuestRewardData(entry.questID) then
+            cttipSep()
+            cttipLine("Rewards", 1, 0.82, 0)
+
+            local xp = GetQuestLogRewardXP and GetQuestLogRewardXP(entry.questID)
+            if xp and xp > 0 and not IsPlayerAtEffectiveMaxLevel() then
+                local xpStr = BONUS_OBJECTIVE_EXPERIENCE_FORMAT and BONUS_OBJECTIVE_EXPERIENCE_FORMAT:format(xp)
+                              or ((BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or tostring(xp)) .. " XP")
+                cttipLine(xpStr, 0.7, 0.7, 0.7)
+            end
+
+            if GetNumQuestLogRewards(entry.questID) > 0 then
+                local name, texture, count, quality, _, _, itemLevel = GetQuestLogRewardInfo(1, entry.questID)
+                if name then
+                    local qc = quality and ITEM_QUALITY_COLORS[quality]
+                    local qr, qg, qb = qc and qc.r or 0.8, qc and qc.g or 0.8, qc and qc.b or 0.8
+                    local icon    = texture or entry.rewardTexture
+                    local iconStr = icon and ("|T" .. icon .. ":15:15:0:0|t ") or ""
+                    local nameStr = (count and count > 1) and (name .. " x" .. count) or name
+                    cttipLine(iconStr .. nameStr, qr, qg, qb)
+                    if entry.rewardSubtitle and entry.rewardSubtitle ~= "" then
+                        cttipLine(entry.rewardSubtitle, 0.55, 0.55, 0.55)
+                    end
+                    if itemLevel and itemLevel > 0 then
+                        cttipLine("Item Level " .. itemLevel, 1, 1, 1)
+                    end
+                    -- Item stats via GetQuestLogItemLink + C_Item.GetItemStats.
+                    -- Pure data query, no tooltip rendering — completely taint-safe.
+                    local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", 1, entry.questID)
+                    local stats = link and C_Item and C_Item.GetItemStats and C_Item.GetItemStats(link)
+                    if stats then
+                        for statKey, val in pairs(stats) do
+                            local label = _G[statKey] or statKey
+                            cttipLine("+" .. val .. " " .. label, 0.0, 0.8, 0.1)
+                        end
+                    end
+                end
+            end
+
+            local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(entry.questID)
+            if currencies and #currencies > 0 then
+                for _, c in ipairs(currencies) do
+                    local nameStr = c.name or "Currency"
+                    if c.numItems and c.numItems > 1 then nameStr = nameStr .. " x" .. c.numItems end
+                    cttipLine(nameStr, 1, 0.9, 0.5)
+                end
+            end
+
+            local copper = GetQuestLogRewardMoney(entry.questID)
+            if copper and copper > 0 then
+                cttipLine(formatMoney(copper), 1, 0.82, 0.1)
+            end
+        else
+            cttipLine("Reward loading...", 0.5, 0.5, 0.5)
+        end
+
+    else
+        -- ── Compact reward display ─────────────────────────────────────
+        if HaveQuestRewardData(entry.questID) then
+            if GetNumQuestLogRewards(entry.questID) > 0 then
+                local name, texture, count, quality, _, _, itemLevel = GetQuestLogRewardInfo(1, entry.questID)
+                if name then
+                    local qc = quality and ITEM_QUALITY_COLORS[quality]
+                    local qr, qg, qb = qc and qc.r or 0.8, qc and qc.g or 0.8, qc and qc.b or 0.8
+                    local icon    = texture or entry.rewardTexture
+                    local iconStr = icon and ("|T" .. icon .. ":15:15:0:0|t ") or ""
+                    local nameStr = (count and count > 1) and (name .. " x" .. count) or name
+                    local detail  = entry.rewardSubtitle or ""
+                    if itemLevel and itemLevel > 0 then
+                        detail = detail ~= "" and (detail .. "  " .. itemLevel) or tostring(itemLevel)
+                    end
+                    cttipLine(iconStr .. nameStr, qr, qg, qb)
+                    if detail ~= "" then
+                        cttipLine(detail, 0.55, 0.55, 0.55)
+                    end
+                end
+            end
+            local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(entry.questID)
+            if currencies and #currencies > 0 then
+                for _, c in ipairs(currencies) do
+                    local nameStr = c.name or "Currency"
+                    if c.numItems and c.numItems > 1 then nameStr = nameStr .. " x" .. c.numItems end
+                    cttipLine(nameStr, 1, 0.9, 0.5)
+                end
+            end
+            local copper = GetQuestLogRewardMoney(entry.questID)
+            if copper and copper > 0 then
+                cttipLine(formatMoney(copper), 1, 0.82, 0.1)
+            end
+        else
+            cttipLine("Reward loading...", 0.5, 0.5, 0.5)
+        end
     end
 
+    -- Time remaining (both modes)
     local timeLeft = entry.expiresAt - GetTime()
     if timeLeft > 0 then
-        local tr, tg, tb = 1, 1, 1
+        local tr, tg, tb = 0.9, 0.9, 0.9
         local tStr
         if timeLeft < 3600 then
             tr, tg, tb = 1, 0.27, 0.27
@@ -156,32 +339,33 @@ local function showRowTooltip(row)
         else
             tStr = string.format("%dd", math.floor(timeLeft / 86400))
         end
-        GameTooltip:AddDoubleLine("Expires:", tStr, 0.5, 0.5, 0.5, tr, tg, tb)
+        local hex = string.format("|cff%02x%02x%02x", tr * 255, tg * 255, tb * 255)
+        cttipLine("|cff888888Expires|r  " .. hex .. tStr .. "|r", 1, 1, 1)
     end
 
-    GameTooltip:Show()
+    cttipShow(row)
 end
 
 -- ── Row interaction ───────────────────────────────────────────────────────────
 
 local function rowOnEnter(self)
     showRowTooltip(self)
-    if self.questID then
+    if self.questID and not InCombatLockdown() then
         self._prevSuperTrack = C_SuperTrack.GetSuperTrackedQuestID()
         C_SuperTrack.SetSuperTrackedQuestID(self.questID)
     end
 end
 
 local function rowOnLeave(self)
-    GameTooltip:Hide()
-    if self._prevSuperTrack ~= nil then
+    cttipHide()
+    if self._prevSuperTrack ~= nil and not InCombatLockdown() then
         C_SuperTrack.SetSuperTrackedQuestID(self._prevSuperTrack)
         self._prevSuperTrack = nil
     end
 end
 
 local function rowOnClick(self, btn)
-    if btn == "LeftButton" and self.questID then
+    if btn == "LeftButton" and self.questID and not InCombatLockdown() then
         local entry = AddonTable.questCache[self.questID]
         if entry and entry.mapID then
             OpenWorldMap(entry.mapID)
@@ -249,8 +433,6 @@ end
 
 -- Applies entry data to a row in compact or verbose layout.
 local function applyRowToEntry(row, entry, isCompact)
-    row:SetHeight(isCompact and COMPACT_ROW_H or ROW_HEIGHT)
-
     -- Cache reward data on the entry once available; never wipe it once set.
     if HaveQuestRewardData(entry.questID) then
         if not entry.rewardTexture then
@@ -267,30 +449,43 @@ local function applyRowToEntry(row, entry, isCompact)
     local r = entry.stripeR or 0.5
     local g = entry.stripeG or 0.5
     local b = entry.stripeB or 0.5
-    row.stripe:SetColorTexture(r, g, b)
-
-    if entry.rewardTexture then
-        local sz = isCompact and 16 or 20
-        row.icon:SetSize(sz, sz)
-        row.icon:ClearAllPoints()
-        row.icon:SetPoint("LEFT", row, "LEFT", 8, 0)
-        row.icon:SetTexture(entry.rewardTexture)
-        row.icon:Show()
-    else
-        row.icon:Hide()
-    end
 
     row.timeText:SetText(formatTimeLeft(entry.currentTimeLeft))
 
     if isCompact then
+        -- Compact map overlay: icon centred at top, time centred at bottom, no text.
+        row:SetHeight(MAP_COMPACT_ITEM_H)
+        row.stripe:Hide()
+        if entry.rewardTexture then
+            row.icon:SetSize(20, 20)
+            row.icon:ClearAllPoints()
+            row.icon:SetPoint("TOP", row, "TOP", 0, -5)
+            row.icon:SetTexture(entry.rewardTexture)
+            row.icon:Show()
+        else
+            row.icon:Hide()
+        end
         row.timeText:ClearAllPoints()
-        row.timeText:SetPoint("RIGHT", row, "RIGHT", -6, 0)
-        row.timeText:SetWidth(42)
+        row.timeText:SetPoint("BOTTOM", row, "BOTTOM", 0, 5)
+        row.timeText:SetJustifyH("CENTER")
+        row.timeText:SetWidth(48)
         row.titleText:Hide()
         row.subtitleText:Hide()
     else
+        row:SetHeight(ROW_HEIGHT)
+        row.stripe:SetColorTexture(r, g, b)
+        if entry.rewardTexture then
+            row.icon:SetSize(20, 20)
+            row.icon:ClearAllPoints()
+            row.icon:SetPoint("LEFT", row, "LEFT", 8, 0)
+            row.icon:SetTexture(entry.rewardTexture)
+            row.icon:Show()
+        else
+            row.icon:Hide()
+        end
         row.timeText:ClearAllPoints()
         row.timeText:SetPoint("RIGHT", row, "RIGHT", -10, 0)
+        row.timeText:SetJustifyH("RIGHT")
         row.timeText:SetWidth(52)
         row.titleText:ClearAllPoints()
         row.titleText:SetPoint("topleft",  row, "topleft",  30, -4)
@@ -583,6 +778,7 @@ local function buildUI()
     expBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local settingsBtn = makeGearBtn(header, function()
+        if InCombatLockdown() then return end
         if Settings and AddonTable.settingsCategory then
             Settings.OpenToCategory(AddonTable.settingsCategory.ID)
         elseif AddonTable.optionsPanel then
@@ -868,7 +1064,7 @@ end
 -- ── In-map panel ──────────────────────────────────────────────────────────────
 
 local MAP_PANEL_WIDTH         = 180
-local MAP_PANEL_WIDTH_COMPACT = 60
+local MAP_PANEL_WIDTH_COMPACT = 50
 local MAP_ROW_HEIGHT          = 24
 local MAP_HEADER_H            = 20
 local MAP_MAX_ROWS            = 15
@@ -943,16 +1139,10 @@ local function buildMapPanel()
     bg:SetTexture("Interface\\Buttons\\WHITE8X8")
     panel.backgroundTexture = bg
 
-    local border = CreateFrame("Frame", nil, panel, "BackdropTemplate")
-    border:SetAllPoints()
-    border:SetBackdrop({
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        edgeSize = 10,
-        insets   = {left=3, right=3, top=3, bottom=3},
-    })
-    border:SetBackdropBorderColor(0.15, 0.15, 0.2, 0.90)
+    -- border intentionally removed for now
 
     local optBtn = makeGearBtn(panel, function()
+        if InCombatLockdown() then return end
         if Settings and AddonTable.settingsCategory then
             Settings.OpenToCategory(AddonTable.settingsCategory.ID)
         elseif AddonTable.optionsPanel then
@@ -989,10 +1179,37 @@ local function buildMapPanel()
     listBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     panel.listBtn = listBtn
 
-    -- Header text constrained so it doesn't run under the buttons (4 + 22 + 2 + 22 + 4 = 54px).
+    local compactBtn = CreateFrame("Button", nil, panel)
+    compactBtn:SetSize(18, 14)
+    local compactBtnBg = compactBtn:CreateTexture(nil, "BACKGROUND")
+    compactBtnBg:SetAllPoints()
+    compactBtnBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+    local compactBtnHL = compactBtn:CreateTexture(nil, "HIGHLIGHT")
+    compactBtnHL:SetAllPoints()
+    compactBtnHL:SetColorTexture(1, 1, 1, 0.12)
+    local compactBtnLabel = compactBtn:CreateFontString(nil, "overlay", "GameFontNormalTiny")
+    compactBtnLabel:SetAllPoints()
+    compactBtnLabel:SetJustifyH("CENTER")
+    compactBtnLabel:SetText("C")
+    compactBtn:SetScript("OnClick", function()
+        PintaWorldQuestsDB.compactMode = not PintaWorldQuestsDB.compactMode
+        if AddonTable.refreshMapPanel then AddonTable.refreshMapPanel() end
+    end)
+    compactBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
+        local mode = PintaWorldQuestsDB and PintaWorldQuestsDB.compactMode
+        GameTooltip:SetText(mode and "Compact mode: ON" or "Compact mode: OFF", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    compactBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    compactBtn:SetPoint("RIGHT", listBtn, "LEFT", -2, 0)
+    panel.compactBtn    = compactBtn
+    panel.compactBtnBg  = compactBtnBg
+
+    -- Header text constrained so it doesn't run under the buttons (4 + 18 + 2 + 22 + 2 + 18 + 4 = 70px).
     local headerText = panel:CreateFontString(nil, "overlay", "GameFontNormalSmall")
     headerText:SetPoint("topleft",  panel, "topleft",  6,   -4)
-    headerText:SetPoint("topright", panel, "topright", -50, -4)
+    headerText:SetPoint("topright", panel, "topright", -70, -4)
     headerText:SetWordWrap(false)
     panel.headerText = headerText
 
@@ -1060,8 +1277,16 @@ function AddonTable.refreshMapPanel(mapID)
     end)
 
     local isCompact = PintaWorldQuestsDB and PintaWorldQuestsDB.compactMode
-    local mapRowH   = isCompact and MAP_ROW_HEIGHT or ROW_HEIGHT
+    local mapRowH   = isCompact and MAP_COMPACT_ITEM_H or ROW_HEIGHT
     local shown     = math.min(#quests, MAP_MAX_ROWS)
+
+    if panel.compactBtnBg then
+        if isCompact then
+            panel.compactBtnBg:SetColorTexture(0.35, 0.22, 0.50, 0.95)
+        else
+            panel.compactBtnBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+        end
+    end
 
     panel:SetWidth(isCompact and MAP_PANEL_WIDTH_COMPACT or MAP_PANEL_WIDTH)
 
@@ -1069,6 +1294,13 @@ function AddonTable.refreshMapPanel(mapID)
         panel.headerText:Hide()
         panel.optBtn:Show()
         panel.listBtn:Show()
+        -- Anchor from left so buttons stay inside the narrow panel (may peek right slightly)
+        panel.compactBtn:ClearAllPoints()
+        panel.compactBtn:SetPoint("TOPLEFT", panel, "TOPLEFT", 2, -3)
+        panel.listBtn:ClearAllPoints()
+        panel.listBtn:SetPoint("LEFT", panel.compactBtn, "RIGHT", 2, 0)
+        panel.optBtn:ClearAllPoints()
+        panel.optBtn:SetPoint("LEFT", panel.listBtn, "RIGHT", 2, 0)
         local totalH = MAP_HEADER_H + shown * mapRowH + 4
         panel:SetHeight(totalH)
         panel.content:SetHeight(shown * mapRowH)
@@ -1078,6 +1310,13 @@ function AddonTable.refreshMapPanel(mapID)
         panel.headerText:Show()
         panel.optBtn:Show()
         panel.listBtn:Show()
+        -- Restore right-anchored layout for verbose mode
+        panel.optBtn:ClearAllPoints()
+        panel.optBtn:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -4, -3)
+        panel.listBtn:ClearAllPoints()
+        panel.listBtn:SetPoint("RIGHT", panel.optBtn, "LEFT", -2, 0)
+        panel.compactBtn:ClearAllPoints()
+        panel.compactBtn:SetPoint("RIGHT", panel.listBtn, "LEFT", -2, 0)
         local mapInfo  = C_Map.GetMapInfo(mapID)
         local zoneName = mapInfo and mapInfo.name or ""
         panel.headerText:SetFormattedText(

@@ -16,6 +16,7 @@ AddonTable.defaultSettings = {
     sortMode = "zone",          -- List sort: "zone" (grouped) or "time" (flat by expiry)
     listVisible = false,        -- List frame open/closed
     minimized = false,          -- List frame minimized state
+    extendedTooltips = false,   -- Show full objectives + item stats on hover
 }
 
 ---Print debug message if debug mode is enabled.
