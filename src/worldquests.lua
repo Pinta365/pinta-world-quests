@@ -8,10 +8,9 @@ local GetQuestTimeLeftSeconds   = C_TaskQuest.GetQuestTimeLeftSeconds
 -- questID -> mapID (or true if mapID unknown) for in-flight async requests
 local pendingDataRequests = {}
 
--- questID -> entry table
 AddonTable.questCache = {}
 
--- ── UI refresh debounce ───────────────────────────────────────────────────────
+-- UI refresh debounce
 
 -- Coalesces rapid back-to-back scanMap calls (e.g. scanExpansionZones scanning
 -- 6+ maps in one frame) into a single UI refresh on the next frame.
@@ -28,8 +27,6 @@ local function scheduleRefresh()
 end
 
 -- Known expansion roots → their main zone mapIDs.
--- Key is the parent mapID shared by all main zones (e.g. Quel'Thalas 2537).
--- Add future expansions here when their zone IDs are known.
 local EXPANSION_ZONES = {
     [2537] = { 2395, 2437, 2405, 2413 },                    -- Midnight: Eversong, Zul'Aman, Voidstorm, Haradar
     [2274] = { 2248, 2214, 2215, 2255, 2369, 2371 },        -- TWW: Isle of Dorn, Ringing Deeps, Hallowfall, Azj-Kahet, Siren Isle, K'aresh
@@ -44,7 +41,7 @@ AddonTable.EXPANSIONS = {
     { name = "Midnight",       short = "Mid",  root = 2537 },
 }
 
--- ── Expansion detection & scan ────────────────────────────────────────────────
+-- Expansion detection & scan
 
 -- Walk up from playerMapID; return the first ancestor that is a key in
 -- EXPANSION_ZONES (= the expansion root we recognise), or nil if unknown.
@@ -79,7 +76,7 @@ function AddonTable.scanExpansionZones()
     end
 end
 
--- ── Async data loading ────────────────────────────────────────────────────────
+-- Async data loading
 
 local function requestQuestData(questID, mapID)
     if pendingDataRequests[questID] then return end
@@ -98,12 +95,11 @@ local function onQuestDataLoaded(questID, success)
     end
 end
 
--- ── Quest processing ──────────────────────────────────────────────────────────
+-- Quest processing
 
 function AddonTable.processQuest(questID, mapID)
     local title = C_QuestLog.GetTitleForQuestID(questID)
     if not title then
-        -- Data not cached yet — request it, preserving the mapID for when it arrives
         requestQuestData(questID, mapID)
         return
     end
@@ -111,7 +107,6 @@ function AddonTable.processQuest(questID, mapID)
     local timeLeft = GetQuestTimeLeftSeconds(questID) or 0
     local tagInfo  = C_QuestLog.GetQuestTagInfo(questID)
 
-    -- Preserve fields from existing cache entry that are expensive or async to re-acquire.
     local existing = AddonTable.questCache[questID]
     local entry = {
         questID        = questID,
@@ -133,7 +128,6 @@ function AddonTable.processQuest(questID, mapID)
         C_TaskQuest.RequestPreloadRewardData(questID)
     end
 
-    -- Only log on first discovery to avoid spamming on every periodic rescan.
     if not existing then
         AddonTable.Debug(string.format("%d | %s | %dm | zone:%s | %s%s",
             questID, title, math.floor(timeLeft / 60),
@@ -143,7 +137,7 @@ function AddonTable.processQuest(questID, mapID)
     end
 end
 
--- ── Map scan ──────────────────────────────────────────────────────────────────
+-- Map scan
 
 function AddonTable.scanExpansion(root)
     local zones = EXPANSION_ZONES[root]
@@ -170,9 +164,9 @@ function AddonTable.scanMap(mapID)
     scheduleRefresh()
 end
 
--- ── Hooks and events ──────────────────────────────────────────────────────────
+-- Hooks and events
 
--- Fires ~every 0.5s while the world map is open — throttle to avoid constant rescanning.
+-- throttle to avoid constant rescanning.
 local lastHookScan = 0
 local HOOK_SCAN_THROTTLE = 10  -- seconds
 

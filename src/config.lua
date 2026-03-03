@@ -19,14 +19,6 @@ AddonTable.defaultSettings = {
     extendedTooltips = false,   -- Show full objectives + item stats on hover
 }
 
----Print debug message if debug mode is enabled.
----@param ... any Message parts
-function AddonTable.Debug(...)
-    if PintaWorldQuestsDB and PintaWorldQuestsDB.debug then
-        print("|cff888888[PWQ Debug]|r", ...)
-    end
-end
-
 -- Initialize saved variables
 function AddonTable.initSettings()
     PintaWorldQuestsDB = PintaWorldQuestsDB or {}
