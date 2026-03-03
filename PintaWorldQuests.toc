@@ -5,8 +5,8 @@
 ## Author: Pinta365@Github
 ## Version: 0.0.1
 ## SavedVariables: PintaWorldQuestsDB
-## X-Curse-Project-ID: 1171007
-## X-Wago-ID: RNL9Y86o
+## X-Curse-Project-ID: 1476738
+## X-Wago-ID: EGPe7ON1
 ## IconTexture: Interface\AddOns\PintaWorldQuests\Textures\pinta
 ## Category: Map
 ## Category-deDE: Karte
