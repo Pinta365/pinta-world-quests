@@ -108,7 +108,13 @@ local function rowOnLeave(self)
 end
 
 local function rowOnClick(self, btn)
-    if btn == "LeftButton" and self.questID and not InCombatLockdown() then
+    if btn ~= "LeftButton" or not self.questID then return end
+    if IsShiftKeyDown() then
+        local link = GetQuestLink(self.questID)
+        if link then ChatEdit_InsertLink(link) end
+        return
+    end
+    if not InCombatLockdown() then
         local entry = AddonTable.questCache[self.questID]
         if entry and entry.mapID then
             OpenWorldMap(entry.mapID)
