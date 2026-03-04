@@ -244,5 +244,12 @@ local function showRowTooltip(row)
     cttipShow(row)
 end
 
-AddonTable.showRowTooltip = showRowTooltip
-AddonTable.cttipHide      = cttipHide
+local function showButtonTooltip(anchor, text)
+    cttipReset()
+    cttipLine(text, 1, 1, 1)
+    cttipShow(anchor)
+end
+
+AddonTable.showRowTooltip    = showRowTooltip
+AddonTable.showButtonTooltip = showButtonTooltip
+AddonTable.cttipHide         = cttipHide

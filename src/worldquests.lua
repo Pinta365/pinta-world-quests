@@ -10,6 +10,8 @@ local pendingDataRequests = {}
 
 AddonTable.questCache = {}
 
+local lastKnownRoot = nil
+
 -- UI refresh debounce
 
 -- Coalesces rapid back-to-back scanMap calls (e.g. scanExpansionZones scanning
@@ -57,21 +59,24 @@ local function detectExpansionRoot(playerMapID)
 end
 
 function AddonTable.scanExpansionZones()
-    local playerMapID = C_Map.GetBestMapForUnit("player")
-    if not playerMapID then return end
+    local filterRoot = PintaWorldQuestsDB and PintaWorldQuestsDB.expansionFilter
+    if filterRoot then
+        AddonTable.scanExpansion(filterRoot)
+        return
+    end
 
-    local root = detectExpansionRoot(playerMapID)
+    local playerMapID = C_Map.GetBestMapForUnit("player")
+    local root = playerMapID and detectExpansionRoot(playerMapID)
 
     if root then
-        AddonTable.Debug("scanExpansionZones: known root", root,
-            (C_Map.GetMapInfo(root) or {}).name or "?")
-        for _, mapID in ipairs(EXPANSION_ZONES[root]) do
-            AddonTable.scanMap(mapID)
-        end
-        AddonTable.scanMap(root)
-    else
-        -- Unknown expansion: just scan the current zone as a starting point
-        AddonTable.Debug("scanExpansionZones: unknown expansion, scanning current zone", playerMapID)
+        lastKnownRoot = root
+        AddonTable.Debug("scanExpansionZones: root", root, (C_Map.GetMapInfo(root) or {}).name or "?")
+        AddonTable.scanExpansion(root)
+    elseif lastKnownRoot then
+        AddonTable.Debug("scanExpansionZones: fallback to last known root", lastKnownRoot)
+        AddonTable.scanExpansion(lastKnownRoot)
+    elseif playerMapID then
+        AddonTable.Debug("scanExpansionZones: unknown zone, scanning current map", playerMapID)
         AddonTable.scanMap(playerMapID)
     end
 end
