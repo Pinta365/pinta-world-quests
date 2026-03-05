@@ -42,6 +42,16 @@ local function initOptionsPanel()
         PintaWorldQuestsDB.extendedTooltips = self:GetChecked()
     end)
     optionsPanel.extendedTooltipCheckbox = extendedTooltipCheckbox
+    yOffset = yOffset - 30
+
+    local skinPinsCheckbox = CreateFrame("CheckButton", nil, optionsPanel, "InterfaceOptionsCheckButtonTemplate")
+    skinPinsCheckbox:SetPoint("topleft", 16, yOffset)
+    skinPinsCheckbox.Text:SetText("Replace quest pin icons with reward icons")
+    skinPinsCheckbox.Text:SetFontObject("GameFontHighlightSmall")
+    skinPinsCheckbox:SetScript("OnClick", function(self)
+        PintaWorldQuestsDB.skinQuestPins = self:GetChecked()
+    end)
+    optionsPanel.skinPinsCheckbox = skinPinsCheckbox
     yOffset = yOffset - 50
 
     local scaleLabel = optionsPanel:CreateFontString(nil, "overlay", "GameFontHighlightSmall")
@@ -153,6 +163,9 @@ local function initOptionsPanel()
         end
         if optionsPanel.extendedTooltipCheckbox then
             optionsPanel.extendedTooltipCheckbox:SetChecked(PintaWorldQuestsDB.extendedTooltips == true)
+        end
+        if optionsPanel.skinPinsCheckbox then
+            optionsPanel.skinPinsCheckbox:SetChecked(PintaWorldQuestsDB.skinQuestPins ~= false)
         end
         if optionsPanel.rightSideCheckbox then
             optionsPanel.rightSideCheckbox:SetChecked(PintaWorldQuestsDB.mapPanelSide == "right")

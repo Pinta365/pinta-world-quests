@@ -184,6 +184,29 @@ hooksecurefunc(WorldQuestDataProviderMixin, "RefreshAllData", function(self, fro
     AddonTable.scanMap(mapID)
 end)
 
+local PIN_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+
+hooksecurefunc(WorldQuestPinMixin, "RefreshVisuals", function(pin)
+    if not PintaWorldQuestsDB or not PintaWorldQuestsDB.skinQuestPins then
+        if pin.pintaIcon then pin.pintaIcon:Hide() end
+        return
+    end
+    local entry = AddonTable.questCache[pin.questID]
+    if not entry or not entry.rewardTexture then
+        if pin.pintaIcon then pin.pintaIcon:Hide() end
+        return
+    end
+    if not pin.pintaIcon then
+        local tex = pin.Display:CreateTexture(nil, "ARTWORK", nil, 2)
+        tex:SetPoint("CENTER", pin.Display, "CENTER")
+        tex:SetMask(PIN_MASK)
+        pin.pintaIcon = tex
+    end
+    pin.pintaIcon:SetTexture(entry.rewardTexture)
+    pin.pintaIcon:SetSize(18, 18)
+    pin.pintaIcon:Show()
+end)
+
 local eventFrame = CreateFrame("Frame")
 
 eventFrame:RegisterEvent("QUEST_DATA_LOAD_RESULT")

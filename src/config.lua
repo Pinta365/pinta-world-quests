@@ -17,6 +17,7 @@ AddonTable.defaultSettings = {
     listVisible = false,        -- List frame open/closed
     minimized = false,          -- List frame minimized state
     extendedTooltips = false,   -- Show full objectives + item stats on hover
+    skinQuestPins = true,       -- Replace quest pin icons on the map with reward icons
 }
 
 -- Initialize saved variables
