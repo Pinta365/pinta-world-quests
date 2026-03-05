@@ -156,7 +156,7 @@ end
 function AddonTable.scanMap(mapID)
     local tasks = GetQuestsForPlayerByMapID(mapID)
 
-    if not tasks then return end
+    if not tasks or #tasks == 0 then return end
 
     local activeIDs = {}
     for _, task in ipairs(tasks) do
@@ -167,8 +167,6 @@ function AddonTable.scanMap(mapID)
             AddonTable.questCache[questID] = nil
         end
     end
-
-    if #tasks == 0 then return end
 
     AddonTable.Debug("scanMap", mapID, "found", #tasks, "tasks")
 

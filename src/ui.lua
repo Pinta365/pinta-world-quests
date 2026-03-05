@@ -496,7 +496,6 @@ local function buildUI()
                     PintaWorldQuestsDB.expansionFilter = capturedExp.root
                     closeExpPopup()
                     updateExpLabel()
-                    wipe(AddonTable.questCache)
                     if capturedExp.root then
                         AddonTable.scanExpansion(capturedExp.root)
                     else
@@ -1116,13 +1115,26 @@ function AddonTable.initUI()
         end
         local main = AddonTable.mainFrame
         if main and PintaWorldQuestsDB.minimized then
+            local filterRoot  = PintaWorldQuestsDB and PintaWorldQuestsDB.expansionFilter
+            local filterZones = filterRoot and AddonTable.EXPANSION_ZONES and AddonTable.EXPANSION_ZONES[filterRoot]
             local minT, maxT, count = math.huge, 0, 0
             for _, entry in pairs(AddonTable.questCache) do
                 local t = entry.expiresAt - now
                 if t > 0 then
-                    count = count + 1
-                    if t < minT then minT = t end
-                    if t > maxT then maxT = t end
+                    local include = true
+                    if filterZones then
+                        include = (entry.mapID == filterRoot)
+                        if not include then
+                            for _, zid in ipairs(filterZones) do
+                                if entry.mapID == zid then include = true; break end
+                            end
+                        end
+                    end
+                    if include then
+                        count = count + 1
+                        if t < minT then minT = t end
+                        if t > maxT then maxT = t end
+                    end
                 end
             end
             if count > 0 then
