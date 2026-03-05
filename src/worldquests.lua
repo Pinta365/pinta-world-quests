@@ -10,7 +10,7 @@ local pendingDataRequests = {}
 
 AddonTable.questCache = {}
 
-local lastKnownRoot = nil
+AddonTable.lastKnownRoot = nil
 
 -- UI refresh debounce
 
@@ -69,12 +69,12 @@ function AddonTable.scanExpansionZones()
     local root = playerMapID and detectExpansionRoot(playerMapID)
 
     if root then
-        lastKnownRoot = root
+        AddonTable.lastKnownRoot = root
         AddonTable.Debug("scanExpansionZones: root", root, (C_Map.GetMapInfo(root) or {}).name or "?")
         AddonTable.scanExpansion(root)
-    elseif lastKnownRoot then
-        AddonTable.Debug("scanExpansionZones: fallback to last known root", lastKnownRoot)
-        AddonTable.scanExpansion(lastKnownRoot)
+    elseif AddonTable.lastKnownRoot then
+        AddonTable.Debug("scanExpansionZones: fallback to last known root", AddonTable.lastKnownRoot)
+        AddonTable.scanExpansion(AddonTable.lastKnownRoot)
     elseif playerMapID then
         AddonTable.Debug("scanExpansionZones: unknown zone, scanning current map", playerMapID)
         AddonTable.scanMap(playerMapID)
@@ -117,7 +117,7 @@ function AddonTable.processQuest(questID, mapID)
         questID        = questID,
         mapID          = mapID or (existing and existing.mapID),
         title          = title,
-        expiresAt      = GetTime() + timeLeft,
+        expiresAt      = GetServerTime() + timeLeft,
         tagName        = tagInfo and tagInfo.tagName or "",
         quality        = tagInfo and tagInfo.quality or Enum.WorldQuestQuality.Common,
         isElite        = tagInfo and tagInfo.isElite or false,
@@ -155,7 +155,20 @@ end
 
 function AddonTable.scanMap(mapID)
     local tasks = GetQuestsForPlayerByMapID(mapID)
-    if not tasks or #tasks == 0 then return end
+
+    if not tasks then return end
+
+    local activeIDs = {}
+    for _, task in ipairs(tasks) do
+        activeIDs[task.questID] = true
+    end
+    for questID, entry in pairs(AddonTable.questCache) do
+        if entry.mapID == mapID and not activeIDs[questID] then
+            AddonTable.questCache[questID] = nil
+        end
+    end
+
+    if #tasks == 0 then return end
 
     AddonTable.Debug("scanMap", mapID, "found", #tasks, "tasks")
 

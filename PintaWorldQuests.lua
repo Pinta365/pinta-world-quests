@@ -5,6 +5,7 @@ local function onEvent(self, event, ...)
         AddonTable.initSettings()
         AddonTable.initOptionsPanel()
         AddonTable.initUI()
+        AddonTable.initAlerts()
         print("|cff45D388[PWQ]|r v" .. AddonTable.version .. " loaded. Type |cffFFFFFF/pwq|r for commands.")
     elseif event == "PLAYER_ENTERING_WORLD" then
         AddonTable.scanExpansionZones()

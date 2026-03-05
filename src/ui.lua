@@ -671,7 +671,7 @@ function AddonTable.refreshList()
     local content = AddonTable.listContent
     if not content then return end
 
-    local now         = GetTime()
+    local now         = GetServerTime()
     local sortMode    = PintaWorldQuestsDB and PintaWorldQuestsDB.sortMode or "zone"
     local totalQuests = 0
     local allEntries  = {}
@@ -997,7 +997,7 @@ function AddonTable.refreshMapPanel(mapID)
     local validMaps = {}
     collectDescendantMaps(mapID, validMaps)
 
-    local now    = GetTime()
+    local now    = GetServerTime()
     local quests = {}
     for _, entry in pairs(AddonTable.questCache) do
         if validMaps[entry.mapID] then
@@ -1097,7 +1097,7 @@ function AddonTable.initUI()
     end)
 
     C_Timer.NewTicker(5, function()
-        local now = GetTime()
+        local now = GetServerTime()
         for _, row in ipairs(rowPool) do
             if row:IsShown() and row.questID then
                 local entry = AddonTable.questCache[row.questID]

@@ -18,6 +18,12 @@ AddonTable.defaultSettings = {
     minimized = false,          -- List frame minimized state
     extendedTooltips = false,   -- Show full objectives + item stats on hover
     skinQuestPins = true,       -- Replace quest pin icons on the map with reward icons
+    alertEnabled   = false,     -- Master on/off for expiry alerts
+    alertThreshold = 1800,      -- Seconds before expiry to fire alert (1800 = 30 min)
+    alertSound     = "Raid Warning", -- Sound label to play on alert; nil = no sound
+    alertChannel   = "Master",  -- Audio channel for alert sound
+    alertScope     = "filter",  -- "all" = every cached WQ; "filter" = current expansion only
+    alerted        = {},        -- { [questID] = expiresAt } — persists across reloads
 }
 
 -- Initialize saved variables

@@ -4,6 +4,7 @@
     <Include file="src\utils.lua"/>
     <Include file="src\options.lua"/>
     <Include file="src\worldquests.lua"/>
+    <Include file="src\alerts.lua"/>
     <Include file="src\tooltip.lua"/>
     <Include file="src\ui.lua"/>
     <Include file="src\commands.lua"/>
