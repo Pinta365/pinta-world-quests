@@ -76,12 +76,16 @@ local function cttipLine(text, r, g, b)
     cttipY = cttipY + CTTIP_LINE_H + 2
 end
 
-local function cttipShow(anchor)
+local function cttipShow(anchor, width)
     cttipEnsure()
-    cttipFrame:SetSize(CTTIP_W, cttipY + CTTIP_PAD_Y)
+    width = width or CTTIP_W
+    for i = 1, cttipN do
+        cttipFonts[i]:SetWidth(width - CTTIP_PAD_X * 2)
+    end
+    cttipFrame:SetSize(width, cttipY + CTTIP_PAD_Y)
     cttipFrame:ClearAllPoints()
     local right = anchor:GetRight()
-    if right and (right + CTTIP_W + 8) > GetScreenWidth() then
+    if right and (right + width + 8) > GetScreenWidth() then
         cttipFrame:SetPoint("TOPRIGHT", anchor, "TOPLEFT", -4, 0)
     else
         cttipFrame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)
@@ -222,7 +226,7 @@ local function showRowTooltip(row)
         end
     end
 
-    local timeLeft = entry.expiresAt - GetTime()
+    local timeLeft = entry.expiresAt - GetServerTime()
     if timeLeft > 0 then
         local tr, tg, tb = 0.9, 0.9, 0.9
         local tStr
@@ -247,7 +251,10 @@ end
 local function showButtonTooltip(anchor, text)
     cttipReset()
     cttipLine(text, 1, 1, 1)
-    cttipShow(anchor)
+    local fs = cttipFonts[1]
+    fs:SetWidth(0)
+    local w = math.ceil(fs:GetStringWidth()) + CTTIP_PAD_X * 2
+    cttipShow(anchor, w)
 end
 
 AddonTable.showRowTooltip    = showRowTooltip
