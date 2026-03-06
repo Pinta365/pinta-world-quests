@@ -24,6 +24,7 @@ function AddonTable.initCommands()
         print(c, "Commands:")
         print(c, "|cffFFFFFF/pwq toggle|r \226\128\148 show or hide the quest list")
         print(c, "|cffFFFFFF/pwq clearalerts|r \226\128\148 clear alert history (re-fires all pending alerts)")
+        print(c, "|cffFFFFFF/pwq debug|r \226\128\148 toggle debug output")
         print(c, "|cffFFFFFF/pwq reset|r \226\128\148 reset all settings to defaults")
     end
 
@@ -43,6 +44,9 @@ SlashCmdList["PINTAWQ"] = function(msg)
         elseif cmd == "clearalerts" then
             wipe(PintaWorldQuestsDB.alerted)
             print("|cff45D388[PWQ]|r Alert history cleared.")
+        elseif cmd == "debug" then
+            PintaWorldQuestsDB.debug = not PintaWorldQuestsDB.debug
+            print("|cff45D388[PWQ]|r Debug", PintaWorldQuestsDB.debug and "|cff00FF00ON|r" or "|cffFF4444OFF|r")
         elseif cmd == "reset" then
             StaticPopup_Show("PINTAWQ_RESET_CONFIRM")
         else
