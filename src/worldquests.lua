@@ -197,25 +197,33 @@ end)
 
 local PIN_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
+local pinIconOverlays = {}
+
 hooksecurefunc(WorldQuestPinMixin, "RefreshVisuals", function(pin)
-    if not PintaWorldQuestsDB or not PintaWorldQuestsDB.skinQuestPins then
-        if pin.pintaIcon then pin.pintaIcon:Hide() end
+    local overlay = pinIconOverlays[pin]
+    if not PintaWorldQuestsDB or not PintaWorldQuestsDB.skinQuestPins
+    or IsInInstance() then
+        if overlay then overlay:Hide() end
         return
     end
     local entry = AddonTable.questCache[pin.questID]
     if not entry or not entry.rewardTexture then
-        if pin.pintaIcon then pin.pintaIcon:Hide() end
+        if overlay then overlay:Hide() end
         return
     end
-    if not pin.pintaIcon then
-        local tex = pin.Display:CreateTexture(nil, "ARTWORK", nil, 2)
-        tex:SetPoint("CENTER", pin.Display, "CENTER")
+    if not overlay then
+        overlay = CreateFrame("Frame", nil, pin)
+        overlay:SetAllPoints(pin.Display.Icon)
+        local tex = overlay:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(overlay)
         tex:SetMask(PIN_MASK)
-        pin.pintaIcon = tex
+        overlay.tex = tex
+        pinIconOverlays[pin] = overlay
     end
-    pin.pintaIcon:SetTexture(entry.rewardTexture)
-    pin.pintaIcon:SetSize(18, 18)
-    pin.pintaIcon:Show()
+
+    overlay:SetFrameLevel(pin:GetFrameLevel() + 5)
+    overlay.tex:SetTexture(entry.rewardTexture)
+    overlay:Show()
 end)
 
 local eventFrame = CreateFrame("Frame")
