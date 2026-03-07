@@ -5,6 +5,14 @@ local addonName, AddonTable = ...
 local GetQuestsForPlayerByMapID = C_TaskQuest.GetQuestsOnMap or C_TaskQuest.GetQuestsForPlayerByMapID
 local GetQuestTimeLeftSeconds   = C_TaskQuest.GetQuestTimeLeftSeconds
 
+-- Get the map ID from a data provider via C API.
+local function getViewedMapID(dataProvider)
+    local ok, mapID = pcall(function()
+        return dataProvider:GetMap():GetMapID()
+    end)
+    return ok and mapID or nil
+end
+
 -- questID -> mapID (or true if mapID unknown) for in-flight async requests
 local pendingDataRequests = {}
 
@@ -12,10 +20,7 @@ AddonTable.questCache = {}
 
 AddonTable.lastKnownRoot = nil
 
--- UI refresh debounce
-
--- Coalesces rapid back-to-back scanMap calls (e.g. scanExpansionZones scanning
--- 6+ maps in one frame) into a single UI refresh on the next frame.
+-- Coalesce rapid scanMap calls into a single UI refresh next frame.
 local refreshPending = false
 local function scheduleRefresh()
     if not refreshPending then
@@ -182,12 +187,11 @@ end
 
 -- Hooks and events
 
--- throttle to avoid constant rescanning.
 local lastHookScan = 0
 local HOOK_SCAN_THROTTLE = 10  -- seconds
 
 hooksecurefunc(WorldQuestDataProviderMixin, "RefreshAllData", function(self, fromOnShow)
-    local mapID = WorldMapFrame.mapID
+    local mapID = getViewedMapID(self)
     if not mapID then return end
     local now = GetTime()
     if now - lastHookScan < HOOK_SCAN_THROTTLE then return end
@@ -206,23 +210,21 @@ hooksecurefunc(WorldQuestPinMixin, "RefreshVisuals", function(pin)
         if overlay then overlay:Hide() end
         return
     end
-    local entry = AddonTable.questCache[pin.questID]
+    local qid = pin.questID
+    local ok, cleaned = pcall(function() return tonumber(tostring(qid)) end)
+    local entry = AddonTable.questCache[ok and cleaned or qid]
     if not entry or not entry.rewardTexture then
         if overlay then overlay:Hide() end
         return
     end
     if not overlay then
-        overlay = CreateFrame("Frame", nil, pin)
+        overlay = pin.Display:CreateTexture(nil, "OVERLAY")
         overlay:SetAllPoints(pin.Display.Icon)
-        local tex = overlay:CreateTexture(nil, "ARTWORK")
-        tex:SetAllPoints(overlay)
-        tex:SetMask(PIN_MASK)
-        overlay.tex = tex
+        overlay:SetMask(PIN_MASK)
         pinIconOverlays[pin] = overlay
     end
 
-    overlay:SetFrameLevel(pin:GetFrameLevel() + 5)
-    overlay.tex:SetTexture(entry.rewardTexture)
+    overlay:SetTexture(entry.rewardTexture)
     overlay:Show()
 end)
 
@@ -251,7 +253,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         end
 
     elseif event == "TASK_PROGRESS_UPDATE" or event == "WORLD_QUEST_COMPLETED_BY_SPELL" then
-        local mapID = WorldMapFrame.mapID or C_Map.GetBestMapForUnit("player")
+        local mapID = C_Map.GetBestMapForUnit("player")
         if mapID then AddonTable.scanMap(mapID) end
     end
 end)

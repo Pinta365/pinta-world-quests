@@ -117,7 +117,7 @@ local function rowOnClick(self, btn)
     if not InCombatLockdown() then
         local entry = AddonTable.questCache[self.questID]
         if entry and entry.mapID then
-            OpenWorldMap(entry.mapID)
+            C_Map.OpenWorldMap(entry.mapID)
         end
     end
 end
@@ -533,6 +533,7 @@ local function buildUI()
     headerText:SetPoint("RIGHT", settingsBtn, "LEFT", -6, 0)
 
     main:HookScript("OnHide", closeExpPopup)
+    main:HookScript("OnHide", function() AddonTable.cttipHide() end)
 
     local SCROLLBAR_W = 6
 
@@ -669,6 +670,7 @@ end
 function AddonTable.refreshList()
     local content = AddonTable.listContent
     if not content then return end
+    AddonTable.cttipHide()
 
     local now         = GetServerTime()
     local sortMode    = PintaWorldQuestsDB and PintaWorldQuestsDB.sortMode or "zone"
@@ -989,6 +991,7 @@ end
 function AddonTable.refreshMapPanel(mapID)
     local panel = AddonTable.mapPanel
     if not panel then return end
+    AddonTable.cttipHide()
 
     mapID = mapID or (WorldMapFrame and WorldMapFrame:GetMapID())
     if not mapID then panel:Hide(); return end
