@@ -248,6 +248,34 @@ local function applyRowToEntry(row, entry, isCompact)
         if entry.isElite then
             sub = sub ~= "" and ("Elite · " .. sub) or "Elite"
         end
+        if entry.rewardItemLevel and entry.rewardItemLevel > 0 then
+            local ilvlStr = entry.rewardItemLevel .. " ilvl"
+            sub = sub ~= "" and (sub .. " · " .. ilvlStr) or ilvlStr
+        elseif entry.rewardCategory == "gold" and HaveQuestRewardData(entry.questID) then
+            local copper = GetQuestLogRewardMoney(entry.questID)
+            if copper and copper > 0 then
+                local gold = math.floor(copper / 10000)
+                local silver = math.floor((copper % 10000) / 100)
+                local tag = gold > 0 and (gold .. "g") or (silver .. "s")
+                sub = sub ~= "" and (sub .. " · " .. tag) or tag
+            end
+        elseif entry.rewardCategory == "currency" and HaveQuestRewardData(entry.questID) then
+            local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(entry.questID)
+            if currencies and #currencies > 0 and currencies[1].totalRewardAmount then
+                local amt = currencies[1].totalRewardAmount
+                if amt > 0 then
+                    sub = sub ~= "" and (sub .. " · x" .. amt) or ("x" .. amt)
+                end
+            end
+        elseif entry.rewardCategory == "resources" and HaveQuestRewardData(entry.questID) then
+            local numItems = GetNumQuestLogRewards(entry.questID)
+            if numItems > 0 then
+                local _, _, count = GetQuestLogRewardInfo(1, entry.questID)
+                if count and count > 1 then
+                    sub = sub ~= "" and (sub .. " · x" .. count) or ("x" .. count)
+                end
+            end
+        end
         row.subtitleText:ClearAllPoints()
         row.subtitleText:SetPoint("bottomleft", row, "bottomleft", 30, 4)
         row.subtitleText:SetText(sub)

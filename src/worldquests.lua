@@ -148,9 +148,12 @@ function AddonTable.classifyQuestReward(entry)
     local questID = entry.questID
     if not HaveQuestRewardData(questID) then return end
 
-    if entry.rewardCategory == "pvp"
-    or entry.rewardCategory == "petbattle"
-    or entry.rewardCategory == "dungeon" then
+    local tagLocked = entry.rewardCategory == "pvp"
+        or entry.rewardCategory == "petbattle"
+        or entry.rewardCategory == "dungeon"
+        or entry.rewardCategory == "capstone"
+
+    if tagLocked and entry.rewardItemLevel then
         return
     end
 
@@ -163,16 +166,20 @@ function AddonTable.classifyQuestReward(entry)
                 return  -- item info not loaded yet; retry later
             end
             if equipSlot ~= "" then
-                entry.rewardCategory  = "gear"
                 entry.rewardItemLevel = itemLevel or 0
+                if not tagLocked then
+                    entry.rewardCategory = "gear"
+                end
                 return
             end
         end
         if count and count > 1 then
-            entry.rewardCategory = "resources"
+            if not tagLocked then entry.rewardCategory = "resources" end
             return
         end
     end
+
+    if tagLocked then return end
 
     local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(questID)
     if currencies and #currencies > 0 then
