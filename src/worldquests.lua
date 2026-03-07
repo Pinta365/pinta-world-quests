@@ -35,27 +35,41 @@ end
 
 -- Known expansion roots → their main zone mapIDs.
 local EXPANSION_ZONES = {
-    [2537] = { 2395, 2437, 2405, 2413 },                    -- Midnight: Eversong, Zul'Aman, Voidstorm, Haradar
-    [2274] = { 2248, 2214, 2215, 2255, 2369, 2371 },        -- TWW: Isle of Dorn, Ringing Deeps, Hallowfall, Azj-Kahet, Siren Isle, K'aresh
-    [1978] = { 2022, 2023, 2024, 2025, 2151, 2133, 2200 },  -- Dragonflight: Waking Shores, Ohn'ahran, Azure Span, Thaldraszus, Forbidden Reach, Zaralek, Emerald Dream
+    [2537] = { 2395, 2437, 2405, 2413 },                           -- Midnight
+    [2274] = { 2248, 2214, 2215, 2255, 2369, 2371 },               -- TWW
+    [1978] = { 2022, 2023, 2024, 2025, 2151, 2133, 2200 },         -- Dragonflight
+    [1550] = { 1533, 1536, 1565, 1525, 1543, 1961, 1970 },         -- Shadowlands
+    [619]  = { 630, 641, 650, 634, 680, 646, 790, 905, 885, 830, 882 },  -- Legion
+    [875]  = { 862, 863, 864, 895, 942, 896, 1355, 1462, 876 },    -- BFA (Zandalar + Kul Tiras, Nazjatar, Mechagon)
+}
+
+-- Maps any alt root → canonical expansion root stored in EXPANSION_ZONES
+local ROOT_ALIASES = {
+    [876] = 875,  -- Kul Tiras → BFA
 }
 
 AddonTable.EXPANSION_ZONES = EXPANSION_ZONES
+-- Chronological order (newest first); Auto first, then current → legacy.
 AddonTable.EXPANSIONS = {
-    { name = "Auto",           short = "Auto", root = nil  },
-    { name = "The War Within", short = "TWW",  root = 2274 },
-    { name = "Dragonflight",   short = "DF",   root = 1978 },
-    { name = "Midnight",       short = "Mid",  root = 2537 },
+    { name = "Auto",                   short = "Auto", root = nil  },
+    { name = "Midnight",               short = "Mid",  root = 2537 },
+    { name = "The War Within",         short = "TWW",  root = 2274 },
+    { name = "Dragonflight",           short = "DF",   root = 1978 },
+    { name = "Shadowlands",            short = "SL",   root = 1550 },
+    { name = "Battle for Azeroth",     short = "BFA",  root = 875  },
+    { name = "Legion",                 short = "Leg",  root = 619  },
 }
 
 -- Expansion detection & scan
 
 -- Walk up from playerMapID; return the first ancestor that is a key in
 -- EXPANSION_ZONES (= the expansion root we recognise), or nil if unknown.
+-- ROOT_ALIASES normalises alternate roots (e.g. Kul Tiras) to canonical roots.
 local function detectExpansionRoot(playerMapID)
     local current = playerMapID
     for _ = 1, 8 do
         if EXPANSION_ZONES[current] then return current end
+        if ROOT_ALIASES[current] then return ROOT_ALIASES[current] end
         local info = C_Map.GetMapInfo(current)
         if not info or not info.parentMapID or info.parentMapID == 0 then break end
         current = info.parentMapID
