@@ -2,7 +2,7 @@
 
 local addonName, AddonTable = ...
 
-local FRAME_WIDTH        = 280
+local FRAME_WIDTH        = 300
 local ROW_HEIGHT         = 30    -- verbose mode
 local MAP_COMPACT_ITEM_H = 38    -- compact map overlay
 local VISIBLE_ROWS       = 14
@@ -183,6 +183,9 @@ end
 -- Applies entry data to a row in compact or verbose layout.
 local function applyRowToEntry(row, entry, isCompact)
     if HaveQuestRewardData(entry.questID) then
+        if not entry.rewardCategory or entry.rewardCategory == "other" then
+            AddonTable.classifyQuestReward(entry)
+        end
         if not entry.rewardTexture then
             entry.rewardTexture = getRewardTexture(entry.questID)
         end
@@ -390,20 +393,28 @@ local function buildUI()
     sortLabel:SetAllPoints()
     sortLabel:SetJustifyH("CENTER")
 
+    local SORT_CYCLE = { zone = "time", time = "zone" }
+    local SORT_NEXT_LABEL = { zone = "Time", time = "Zone" }
+    local SORT_TOOLTIP = {
+        zone = "Sorted by zone",
+        time = "Sorted by time remaining",
+    }
+
     local function updateSortBtn()
         local mode = PintaWorldQuestsDB.sortMode or "zone"
-        sortLabel:SetText(mode == "zone" and "|cffaaaaaaTime|r" or "|cffaaaaaaZone|r")
+        sortLabel:SetText("|cffaaaaaa" .. (SORT_NEXT_LABEL[mode] or "Time") .. "|r")
     end
     updateSortBtn()
 
     sortBtn:SetScript("OnClick", function()
-        PintaWorldQuestsDB.sortMode = (PintaWorldQuestsDB.sortMode == "zone") and "time" or "zone"
+        local mode = PintaWorldQuestsDB.sortMode or "zone"
+        PintaWorldQuestsDB.sortMode = SORT_CYCLE[mode] or "zone"
         updateSortBtn()
         if AddonTable.refreshList then AddonTable.refreshList() end
     end)
     sortBtn:SetScript("OnEnter", function(self)
         local mode = PintaWorldQuestsDB.sortMode or "zone"
-        AddonTable.showButtonTooltip(self, mode == "zone" and "Sort by time remaining" or "Sort by zone")
+        AddonTable.showButtonTooltip(self, SORT_TOOLTIP[mode] or "Sort")
     end)
     sortBtn:SetScript("OnLeave", function() AddonTable.cttipHide() end)
 
@@ -516,6 +527,228 @@ local function buildUI()
     end)
     expBtn:SetScript("OnLeave", function() AddonTable.cttipHide() end)
 
+    -- Reward filter button + popup
+
+    local REWARD_CATEGORIES = {
+        { key = "gear",      label = "Gear",             icon = "Interface\\Icons\\INV_Chest_Chain_11" },
+        { key = "currency",  label = "Currency",          icon = "Interface\\Icons\\INV_Misc_Coin_17" },
+        { key = "gold",      label = "Gold",              icon = "Interface\\Icons\\INV_Misc_Coin_01" },
+        { key = "resources", label = "Resources",         icon = "Interface\\Icons\\INV_Misc_Herb_AncientLichen" },
+        { key = "capstone",  label = "Special Assignments", icon = "Interface\\Icons\\INV_Misc_Map02" },
+        { key = "dungeon",   label = "Dungeons & Raids",  icon = "Interface\\Icons\\INV_Misc_Bone_Skull_01" },
+        { key = "pvp",       label = "PvP",               icon = "Interface\\Icons\\Achievement_PVP_P_01" },
+        { key = "petbattle", label = "Pet Battles",       icon = "Interface\\Icons\\PetJournalPortrait" },
+        { key = "other",     label = "Other",             icon = "Interface\\Icons\\INV_Misc_QuestionMark" },
+    }
+
+    local filterPopup, filterCatcher
+
+    local filterBtn = CreateFrame("Button", nil, header)
+    filterBtn:SetSize(18, 14)
+    filterBtn:SetPoint("RIGHT", expBtn, "LEFT", -4, 0)
+
+    local filterBg = filterBtn:CreateTexture(nil, "BACKGROUND")
+    filterBg:SetAllPoints()
+    filterBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+    filterBtn.bg = filterBg
+
+    local filterHL = filterBtn:CreateTexture(nil, "HIGHLIGHT")
+    filterHL:SetAllPoints()
+    filterHL:SetColorTexture(1, 1, 1, 0.12)
+
+    local filterIcon = filterBtn:CreateTexture(nil, "ARTWORK")
+    filterIcon:SetSize(12, 12)
+    filterIcon:SetPoint("CENTER")
+    filterIcon:SetAtlas("adventureguide-icon-filter")
+    if not filterIcon:GetTexture() then
+        filterIcon:SetTexture("Interface\\Icons\\INV_Misc_Spyglass_03")
+        filterIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    end
+
+    local function updateFilterBtnTint()
+        local rf = PintaWorldQuestsDB and PintaWorldQuestsDB.rewardFilter or {}
+        local anyHidden = false
+        for _, v in pairs(rf) do
+            if v then anyHidden = true; break end
+        end
+        if anyHidden then
+            filterBg:SetColorTexture(0.45, 0.35, 0.15, 0.95)
+        else
+            filterBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+        end
+    end
+    updateFilterBtnTint()
+
+    local function closeFilterPopup()
+        if filterPopup  then filterPopup:Hide()  end
+        if filterCatcher then filterCatcher:Hide() end
+    end
+
+    filterBtn:SetScript("OnClick", function(self)
+        if filterPopup and filterPopup:IsShown() then closeFilterPopup(); return end
+
+        if not filterPopup then
+            filterCatcher = CreateFrame("Button", nil, UIParent)
+            filterCatcher:SetAllPoints()
+            filterCatcher:SetFrameStrata("DIALOG")
+            filterCatcher:SetAlpha(0)
+            filterCatcher:SetScript("OnClick", closeFilterPopup)
+            filterCatcher:Hide()
+
+            filterPopup = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+            filterPopup:SetFrameStrata("DIALOG")
+            filterPopup:SetFrameLevel(filterCatcher:GetFrameLevel() + 1)
+            filterPopup:SetBackdrop({
+                bgFile   = "Interface\\Tooltips\\UI-Tooltip-Background",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 10,
+                insets   = {left=3, right=3, top=3, bottom=3},
+            })
+            filterPopup:SetBackdropColor(0.06, 0.05, 0.10, 0.96)
+            filterPopup:SetBackdropBorderColor(0.28, 0.22, 0.35, 0.90)
+            filterPopup:Hide()
+
+            local rowH = 20
+            filterPopup:SetWidth(160)
+            filterPopup:SetHeight((#REWARD_CATEGORIES + 1) * rowH + 10)
+
+            -- Toggle all row
+            local toggleAllRow = CreateFrame("Button", nil, filterPopup)
+            toggleAllRow:SetHeight(rowH)
+            toggleAllRow:SetPoint("LEFT",  filterPopup, "LEFT",  6, 0)
+            toggleAllRow:SetPoint("RIGHT", filterPopup, "RIGHT", -6, 0)
+            toggleAllRow:SetPoint("TOP",   filterPopup, "TOP",   0, -4)
+
+            local toggleAllHL = toggleAllRow:CreateTexture(nil, "HIGHLIGHT")
+            toggleAllHL:SetAllPoints()
+            toggleAllHL:SetColorTexture(1, 1, 1, 0.08)
+
+            local toggleAllLabel = toggleAllRow:CreateFontString(nil, "overlay", "GameFontNormalSmall")
+            toggleAllLabel:SetPoint("LEFT",  toggleAllRow, "LEFT",  4, 0)
+            toggleAllLabel:SetPoint("RIGHT", toggleAllRow, "RIGHT", -4, 0)
+            toggleAllLabel:SetJustifyH("LEFT")
+            toggleAllLabel:SetTextColor(0.65, 0.55, 0.85)
+
+            local function updateToggleAllLabel()
+                local rf = PintaWorldQuestsDB and PintaWorldQuestsDB.rewardFilter or {}
+                local anyHidden = false
+                for _, v in pairs(rf) do
+                    if v then anyHidden = true; break end
+                end
+                toggleAllLabel:SetText(anyHidden and "Select All" or "Deselect All")
+            end
+            toggleAllRow.updateToggleAllLabel = updateToggleAllLabel
+            updateToggleAllLabel()
+
+            toggleAllRow:SetScript("OnClick", function()
+                if not PintaWorldQuestsDB.rewardFilter then
+                    PintaWorldQuestsDB.rewardFilter = {}
+                end
+                local rf = PintaWorldQuestsDB.rewardFilter
+                local anyHidden = false
+                for _, v in pairs(rf) do
+                    if v then anyHidden = true; break end
+                end
+                if anyHidden then
+                    wipe(rf)
+                else
+                    for _, cat in ipairs(REWARD_CATEGORIES) do
+                        rf[cat.key] = true
+                    end
+                end
+                for _, child in pairs({filterPopup:GetChildren()}) do
+                    if child.updateRow then child.updateRow() end
+                end
+                updateToggleAllLabel()
+                updateFilterBtnTint()
+                if AddonTable.refreshList then AddonTable.refreshList() end
+            end)
+
+            local divider = filterPopup:CreateTexture(nil, "ARTWORK")
+            divider:SetHeight(1)
+            divider:SetPoint("LEFT",  filterPopup, "LEFT",  10, 0)
+            divider:SetPoint("RIGHT", filterPopup, "RIGHT", -10, 0)
+            divider:SetPoint("TOP",   filterPopup, "TOP",   0, -(4 + rowH))
+            divider:SetColorTexture(0.28, 0.22, 0.35, 0.60)
+
+            for i, cat in ipairs(REWARD_CATEGORIES) do
+                local capturedCat = cat
+                local row = CreateFrame("Button", nil, filterPopup)
+                row:SetHeight(rowH)
+                row:SetPoint("LEFT",  filterPopup, "LEFT",  6, 0)
+                row:SetPoint("RIGHT", filterPopup, "RIGHT", -6, 0)
+                row:SetPoint("TOP",   filterPopup, "TOP",   0, -(6 + i * rowH))
+
+                local rowHL2 = row:CreateTexture(nil, "HIGHLIGHT")
+                rowHL2:SetAllPoints()
+                rowHL2:SetColorTexture(1, 1, 1, 0.08)
+
+                local catIcon = row:CreateTexture(nil, "ARTWORK")
+                catIcon:SetSize(14, 14)
+                catIcon:SetPoint("LEFT", row, "LEFT", 4, 0)
+                catIcon:SetTexture(capturedCat.icon)
+                catIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+                local rowLabel = row:CreateFontString(nil, "overlay", "GameFontNormalSmall")
+                rowLabel:SetPoint("LEFT",  catIcon, "RIGHT", 4, 0)
+                rowLabel:SetPoint("RIGHT", row, "RIGHT", -20, 0)
+                rowLabel:SetJustifyH("LEFT")
+                rowLabel:SetText(capturedCat.label)
+
+                local check = row:CreateTexture(nil, "ARTWORK")
+                check:SetSize(12, 12)
+                check:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+                check:SetAtlas("checkmark-minimal")
+                if not check:GetTexture() then
+                    check:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+                end
+                row.check = check
+
+                local function updateRow()
+                    local rf = PintaWorldQuestsDB and PintaWorldQuestsDB.rewardFilter or {}
+                    if rf[capturedCat.key] then
+                        row.check:Hide()
+                        rowLabel:SetTextColor(0.4, 0.4, 0.4)
+                        catIcon:SetDesaturated(true)
+                    else
+                        row.check:Show()
+                        rowLabel:SetTextColor(0.8, 0.8, 0.8)
+                        catIcon:SetDesaturated(false)
+                    end
+                end
+                row.updateRow = updateRow
+
+                row:SetScript("OnClick", function()
+                    if not PintaWorldQuestsDB.rewardFilter then
+                        PintaWorldQuestsDB.rewardFilter = {}
+                    end
+                    local rf = PintaWorldQuestsDB.rewardFilter
+                    rf[capturedCat.key] = not rf[capturedCat.key] or nil
+                    updateRow()
+                    updateToggleAllLabel()
+                    updateFilterBtnTint()
+                    if AddonTable.refreshList then AddonTable.refreshList() end
+                end)
+
+                updateRow()
+            end
+        else
+            for _, child in pairs({filterPopup:GetChildren()}) do
+                if child.updateRow then child.updateRow() end
+                if child.updateToggleAllLabel then child.updateToggleAllLabel() end
+            end
+        end
+
+        filterPopup:ClearAllPoints()
+        filterPopup:SetPoint("BOTTOMRIGHT", self, "TOPRIGHT", 0, 2)
+        filterPopup:Show()
+        filterCatcher:Show()
+    end)
+    filterBtn:SetScript("OnEnter", function(self)
+        AddonTable.showButtonTooltip(self, "Filter by reward type")
+    end)
+    filterBtn:SetScript("OnLeave", function() AddonTable.cttipHide() end)
+
     local settingsBtn = makeGearBtn(header, function()
         if InCombatLockdown() then return end
         if Settings and AddonTable.settingsCategory then
@@ -524,7 +757,7 @@ local function buildUI()
             InterfaceOptionsFrame_OpenToCategory(AddonTable.optionsPanel)
         end
     end)
-    settingsBtn:SetPoint("RIGHT", expBtn, "LEFT", -4, 0)
+    settingsBtn:SetPoint("RIGHT", filterBtn, "LEFT", -4, 0)
     settingsBtn:SetScript("OnEnter", function(self)
         AddonTable.showButtonTooltip(self, "Open Settings")
     end)
@@ -533,6 +766,7 @@ local function buildUI()
     headerText:SetPoint("RIGHT", settingsBtn, "LEFT", -6, 0)
 
     main:HookScript("OnHide", closeExpPopup)
+    main:HookScript("OnHide", closeFilterPopup)
     main:HookScript("OnHide", function() AddonTable.cttipHide() end)
 
     local SCROLLBAR_W = 6
@@ -679,6 +913,7 @@ function AddonTable.refreshList()
 
     local filterRoot  = PintaWorldQuestsDB and PintaWorldQuestsDB.expansionFilter
     local filterZones = filterRoot and AddonTable.EXPANSION_ZONES and AddonTable.EXPANSION_ZONES[filterRoot]
+    local rewardFilter = PintaWorldQuestsDB and PintaWorldQuestsDB.rewardFilter or {}
 
     local minTime, maxTime = math.huge, 0
     for questID, entry in pairs(AddonTable.questCache) do
@@ -692,6 +927,9 @@ function AddonTable.refreshList()
                         if entry.mapID == zid then include = true; break end
                     end
                 end
+            end
+            if include and entry.rewardCategory and rewardFilter[entry.rewardCategory] then
+                include = false
             end
             if include then
                 entry.currentTimeLeft = timeLeft
@@ -720,6 +958,15 @@ function AddonTable.refreshList()
         end
         if main.noQuestsText then
             if totalQuests == 0 and not PintaWorldQuestsDB.minimized then
+                local anyHidden = false
+                for _, v in pairs(rewardFilter) do
+                    if v then anyHidden = true; break end
+                end
+                if anyHidden then
+                    main.noQuestsText:SetText("|cff888888No quests match current filters|r")
+                else
+                    main.noQuestsText:SetText("|cff888888No active world quests|r")
+                end
                 main.noQuestsText:Show()
             else
                 main.noQuestsText:Hide()

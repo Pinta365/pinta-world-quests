@@ -115,8 +115,77 @@ local function onQuestDataLoaded(questID, success)
     if success then
         local mapID = (type(storedMapID) == "number") and storedMapID or nil
         AddonTable.processQuest(questID, mapID)
+        local entry = AddonTable.questCache[questID]
+        if entry and HaveQuestRewardData(questID) then
+            AddonTable.classifyQuestReward(entry)
+        end
         scheduleRefresh()
     end
+end
+
+
+-- Reward classification
+
+local function classifyQuestByTag(tagInfo)
+    if not tagInfo then return nil end
+    local wqt = tagInfo.worldQuestType
+    if wqt == Enum.QuestTagType.PvP
+    or wqt == Enum.QuestTagType.FactionAssault then
+        return "pvp"
+    elseif wqt == Enum.QuestTagType.PetBattle then
+        return "petbattle"
+    elseif wqt == Enum.QuestTagType.Capstone then
+        return "capstone"
+    elseif wqt == Enum.QuestTagType.Dungeon
+        or wqt == Enum.QuestTagType.Raid
+        or wqt == Enum.QuestTagType.WorldBoss then
+        return "dungeon"
+    end
+    return nil
+end
+
+function AddonTable.classifyQuestReward(entry)
+    local questID = entry.questID
+    if not HaveQuestRewardData(questID) then return end
+
+    if entry.rewardCategory == "pvp"
+    or entry.rewardCategory == "petbattle"
+    or entry.rewardCategory == "dungeon" then
+        return
+    end
+
+    local numItems = GetNumQuestLogRewards(questID)
+    if numItems > 0 then
+        local _, _, count, _, _, itemID, itemLevel = GetQuestLogRewardInfo(1, questID)
+        if itemID then
+            local _, _, _, _, _, _, _, _, equipSlot = C_Item.GetItemInfo(itemID)
+            if equipSlot == nil then
+                return  -- item info not loaded yet; retry later
+            end
+            if equipSlot ~= "" then
+                entry.rewardCategory  = "gear"
+                entry.rewardItemLevel = itemLevel or 0
+                return
+            end
+        end
+        if count and count > 1 then
+            entry.rewardCategory = "resources"
+            return
+        end
+    end
+
+    local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(questID)
+    if currencies and #currencies > 0 then
+        entry.rewardCategory = "currency"
+        return
+    end
+
+    if GetQuestLogRewardMoney(questID) > 0 then
+        entry.rewardCategory = "gold"
+        return
+    end
+
+    entry.rewardCategory = "other"
 end
 
 -- Quest processing
@@ -145,10 +214,15 @@ function AddonTable.processQuest(questID, mapID)
         stripeG        = existing and existing.stripeG,
         stripeB        = existing and existing.stripeB,
         rewardSubtitle = existing and existing.rewardSubtitle,
+        rewardCategory  = classifyQuestByTag(tagInfo)
+                          or (existing and existing.rewardCategory),
+        rewardItemLevel = existing and existing.rewardItemLevel,
     }
     AddonTable.questCache[questID] = entry
 
-    if not HaveQuestRewardData(questID) then
+    if HaveQuestRewardData(questID) then
+        AddonTable.classifyQuestReward(entry)
+    else
         C_TaskQuest.RequestPreloadRewardData(questID)
     end
 

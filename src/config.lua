@@ -24,6 +24,7 @@ AddonTable.defaultSettings = {
     alertChannel   = "Master",  -- Audio channel for alert sound
     alertScope     = "filter",  -- "all" = every cached WQ; "filter" = current expansion only
     alerted        = {},        -- { [questID] = expiresAt } — persists across reloads
+    rewardFilter   = {},        -- { [categoryKey] = true } — true = hidden
 }
 
 -- Initialize saved variables
