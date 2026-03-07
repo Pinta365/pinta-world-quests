@@ -33,7 +33,7 @@ local function getRewardTexture(questID)
     if GetQuestLogRewardMoney(questID) > 0 then
         return "Interface\\Icons\\INV_Misc_Coin_01"
     end
-    return nil
+    return "Interface\\Icons\\INV_Misc_Map_01"
 end
 
 -- Reward subtitle (gear slot or item category)
