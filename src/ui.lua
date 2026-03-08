@@ -276,6 +276,10 @@ local function applyRowToEntry(row, entry, isCompact)
                 end
             end
         end
+        if entry.hasRepBonus then
+            local repTag = "|cff55cc55Rep bonus|r"
+            sub = sub ~= "" and (sub .. " · " .. repTag) or repTag
+        end
         row.subtitleText:ClearAllPoints()
         row.subtitleText:SetPoint("bottomleft", row, "bottomleft", 30, 4)
         row.subtitleText:SetText(sub)
@@ -638,7 +642,7 @@ local function buildUI()
 
             local rowH = 20
             filterPopup:SetWidth(160)
-            filterPopup:SetHeight((#REWARD_CATEGORIES + 1) * rowH + 10)
+            filterPopup:SetHeight((#REWARD_CATEGORIES + 2) * rowH + 16)
 
             -- Toggle all row
             local toggleAllRow = CreateFrame("Button", nil, filterPopup)
@@ -760,6 +764,74 @@ local function buildUI()
 
                 updateRow()
             end
+
+            -- Rep bonus only row (separate from reward category filters)
+            local repDivider = filterPopup:CreateTexture(nil, "ARTWORK")
+            repDivider:SetHeight(1)
+            repDivider:SetPoint("LEFT",  filterPopup, "LEFT",  10, 0)
+            repDivider:SetPoint("RIGHT", filterPopup, "RIGHT", -10, 0)
+            repDivider:SetPoint("TOP",   filterPopup, "TOP",   0, -(6 + (#REWARD_CATEGORIES + 1) * rowH))
+            repDivider:SetColorTexture(0.28, 0.22, 0.35, 0.60)
+
+            local noRepRow = CreateFrame("Button", nil, filterPopup)
+            noRepRow:SetHeight(rowH)
+            noRepRow:SetPoint("LEFT",  filterPopup, "LEFT",  6, 0)
+            noRepRow:SetPoint("RIGHT", filterPopup, "RIGHT", -6, 0)
+            noRepRow:SetPoint("TOP",   filterPopup, "TOP",   0, -(6 + (#REWARD_CATEGORIES + 1) * rowH + 4))
+
+            local noRepHL = noRepRow:CreateTexture(nil, "HIGHLIGHT")
+            noRepHL:SetAllPoints()
+            noRepHL:SetColorTexture(1, 1, 1, 0.08)
+
+            local noRepIcon = noRepRow:CreateTexture(nil, "ARTWORK")
+            noRepIcon:SetSize(14, 14)
+            noRepIcon:SetPoint("LEFT", noRepRow, "LEFT", 4, 0)
+            noRepIcon:SetTexture("Interface\\Icons\\Achievement_reputation_06")
+            noRepIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            local noRepLabel = noRepRow:CreateFontString(nil, "overlay", "GameFontNormalSmall")
+            noRepLabel:SetPoint("LEFT",  noRepIcon, "RIGHT", 4, 0)
+            noRepLabel:SetPoint("RIGHT", noRepRow, "RIGHT", -20, 0)
+            noRepLabel:SetJustifyH("LEFT")
+            noRepLabel:SetText("Only with rep bonus")
+
+            local noRepCheck = noRepRow:CreateTexture(nil, "ARTWORK")
+            noRepCheck:SetSize(12, 12)
+            noRepCheck:SetPoint("RIGHT", noRepRow, "RIGHT", -4, 0)
+            noRepCheck:SetAtlas("checkmark-minimal")
+            if not noRepCheck:GetTexture() then
+                noRepCheck:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+            end
+
+            local function updateNoRepRow()
+                local rf = PintaWorldQuestsDB and PintaWorldQuestsDB.rewardFilter or {}
+                if rf["noRep"] then
+                    noRepCheck:Show()
+                    noRepLabel:SetTextColor(0.8, 0.8, 0.8)
+                    noRepIcon:SetDesaturated(false)
+                else
+                    noRepCheck:Hide()
+                    noRepLabel:SetTextColor(0.4, 0.4, 0.4)
+                    noRepIcon:SetDesaturated(true)
+                end
+            end
+            noRepRow.updateRow = updateNoRepRow
+
+            noRepRow:SetScript("OnClick", function()
+                if not PintaWorldQuestsDB.rewardFilter then
+                    PintaWorldQuestsDB.rewardFilter = {}
+                end
+                local rf = PintaWorldQuestsDB.rewardFilter
+                rf["noRep"] = not rf["noRep"] or nil
+                updateNoRepRow()
+                for _, child in pairs({filterPopup:GetChildren()}) do
+                    if child.updateToggleAllLabel then child.updateToggleAllLabel() end
+                end
+                updateFilterBtnTint()
+                if AddonTable.refreshList then AddonTable.refreshList() end
+            end)
+
+            updateNoRepRow()
         else
             for _, child in pairs({filterPopup:GetChildren()}) do
                 if child.updateRow then child.updateRow() end
@@ -957,6 +1029,9 @@ function AddonTable.refreshList()
                 end
             end
             if include and entry.rewardCategory and rewardFilter[entry.rewardCategory] then
+                include = false
+            end
+            if include and rewardFilter["noRep"] and not entry.hasRepBonus then
                 include = false
             end
             if include then

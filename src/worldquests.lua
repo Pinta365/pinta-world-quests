@@ -148,6 +148,8 @@ function AddonTable.classifyQuestReward(entry)
     local questID = entry.questID
     if not HaveQuestRewardData(questID) then return end
 
+    entry.hasRepBonus = C_QuestLog.QuestContainsFirstTimeRepBonusForPlayer(questID)
+
     local tagLocked = entry.rewardCategory == "pvp"
         or entry.rewardCategory == "petbattle"
         or entry.rewardCategory == "dungeon"
@@ -216,6 +218,7 @@ function AddonTable.processQuest(questID, mapID)
         tagName        = tagInfo and tagInfo.tagName or "",
         quality        = tagInfo and tagInfo.quality or Enum.WorldQuestQuality.Common,
         isElite        = tagInfo and tagInfo.isElite or false,
+        hasRepBonus    = existing and existing.hasRepBonus or false,
         rewardTexture  = existing and existing.rewardTexture,
         stripeR        = existing and existing.stripeR,
         stripeG        = existing and existing.stripeG,
