@@ -107,8 +107,25 @@ local function rowOnLeave(self)
     end
 end
 
+local pinnedQuestID = nil
+
 local function rowOnClick(self, btn)
-    if btn ~= "LeftButton" or not self.questID then return end
+    if not self.questID then return end
+    if btn == "RightButton" then
+        if pinnedQuestID == self.questID then
+            C_SuperTrack.ClearAllSuperTracked()
+            C_QuestLog.RemoveWorldQuestWatch(self.questID)
+            pinnedQuestID = nil
+            self._prevSuperTrack = nil
+        else
+            QuestUtil.TrackWorldQuest(self.questID, Enum.QuestWatchType.Automatic)
+            C_SuperTrack.SetSuperTrackedQuestID(self.questID)
+            pinnedQuestID = self.questID
+            self._prevSuperTrack = self.questID
+        end
+        return
+    end
+    if btn ~= "LeftButton" then return end
     if IsShiftKeyDown() then
         local link = GetQuestLink(self.questID)
         if link then ChatEdit_InsertLink(link) end
@@ -156,7 +173,7 @@ local function createRow(parent)
     row.titleText = titleText
 
     local subtitleText = row:CreateFontString(nil, "overlay", "GameFontNormalTiny")
-    subtitleText:SetTextColor(0.5, 0.5, 0.5)
+    subtitleText:SetTextColor(0.78, 0.78, 0.78)
     subtitleText:SetJustifyH("LEFT")
     row.subtitleText = subtitleText
 
@@ -166,6 +183,16 @@ local function createRow(parent)
     timeText:SetWidth(52)
     row.timeText = timeText
 
+    local repText = row:CreateFontString(nil, "overlay", "GameFontNormalTiny")
+    repText:SetPoint("RIGHT", timeText, "LEFT", -4, -5)
+    repText:SetJustifyH("RIGHT")
+    repText:SetText("|cff55cc55Rep bonus|r")
+    repText:Hide()
+    row.repText = repText
+    row._subW    = (FRAME_WIDTH - 8) - 30 - 58
+    row._subWRep = row._subW - 68
+
+    row:RegisterForClicks("AnyUp")
     row:SetScript("OnEnter", rowOnEnter)
     row:SetScript("OnLeave", rowOnLeave)
     row:SetScript("OnClick", rowOnClick)
@@ -221,6 +248,10 @@ local function applyRowToEntry(row, entry, isCompact)
         row.timeText:SetWidth(48)
         row.titleText:Hide()
         row.subtitleText:Hide()
+        row.repText:Hide()
+        if row.repDot then
+            if entry.hasRepBonus then row.repDot:Show() else row.repDot:Hide() end
+        end
     else
         row:SetHeight(ROW_HEIGHT)
         row.stripe:SetColorTexture(r, g, b)
@@ -276,14 +307,18 @@ local function applyRowToEntry(row, entry, isCompact)
                 end
             end
         end
-        if entry.hasRepBonus then
-            local repTag = "|cff55cc55Rep bonus|r"
-            sub = sub ~= "" and (sub .. " · " .. repTag) or repTag
-        end
         row.subtitleText:ClearAllPoints()
-        row.subtitleText:SetPoint("bottomleft", row, "bottomleft", 30, 4)
+        row.subtitleText:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 30, 4)
+        if entry.hasRepBonus then
+            row.subtitleText:SetWidth(row._subWRep or 120)
+            row.repText:Show()
+        else
+            row.subtitleText:SetWidth(row._subW or 180)
+            row.repText:Hide()
+        end
         row.subtitleText:SetText(sub)
         row.subtitleText:Show()
+        if row.repDot then row.repDot:Hide() end
     end
 
     row:SetAlpha(1.0)
@@ -1189,7 +1224,7 @@ local function createMapRow(parent)
     row.titleText = titleText
 
     local subtitleText = row:CreateFontString(nil, "overlay", "GameFontNormalTiny")
-    subtitleText:SetTextColor(0.5, 0.5, 0.5)
+    subtitleText:SetTextColor(0.78, 0.78, 0.78)
     subtitleText:SetJustifyH("LEFT")
     row.subtitleText = subtitleText
 
@@ -1199,6 +1234,22 @@ local function createMapRow(parent)
     timeText:SetWidth(10)
     row.timeText = timeText
 
+    local repText = row:CreateFontString(nil, "overlay", "GameFontNormalLarge2")
+    repText:SetPoint("LEFT", timeText, "RIGHT", 2, 0)
+    repText:SetJustifyH("LEFT")
+    repText:SetText("|cff55cc55*|r")
+    repText:Hide()
+    row.repText = repText
+    row._subW    = (MAP_PANEL_WIDTH - 8) - 30 - 18
+    row._subWRep = row._subW
+
+    local repDot = row:CreateFontString(nil, "overlay", "GameFontNormalLarge2")
+    repDot:SetPoint("LEFT", row.icon, "RIGHT", 1, 0)
+    repDot:SetText("|cff55cc55*|r")
+    repDot:Hide()
+    row.repDot = repDot
+
+    row:RegisterForClicks("AnyUp")
     row:SetScript("OnEnter", rowOnEnter)
     row:SetScript("OnLeave", rowOnLeave)
     row:SetScript("OnClick", rowOnClick)
@@ -1318,12 +1369,12 @@ function AddonTable.applyMapPanelSide()
         panel:SetPoint("topleft", WorldMapFrame:GetCanvasContainer(), "topleft", 8, -56)
     end
     if panel.backgroundTexture then
-        local opaque = CreateColor(0, 0, 0, 0.82)
-        local clear  = CreateColor(0, 0, 0, 0)
+        local dark  = CreateColor(0, 0, 0, 1)
+        local mid   = CreateColor(0, 0, 0, 0.25)
         if isRight then
-            panel.backgroundTexture:SetGradient("HORIZONTAL", clear, opaque)
+            panel.backgroundTexture:SetGradient("HORIZONTAL", mid, dark)
         else
-            panel.backgroundTexture:SetGradient("HORIZONTAL", opaque, clear)
+            panel.backgroundTexture:SetGradient("HORIZONTAL", dark, mid)
         end
     end
 end
