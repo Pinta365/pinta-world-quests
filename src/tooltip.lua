@@ -84,8 +84,23 @@ local function cttipShow(anchor, width)
     end
     cttipFrame:SetSize(width, cttipY + CTTIP_PAD_Y)
     cttipFrame:ClearAllPoints()
-    local right = anchor:GetRight()
-    if right and (right + width + 8) > GetScreenWidth() then
+
+    local flipLeft = false
+    if WorldMapFrame and WorldMapFrame:IsShown() then
+        local container = WorldMapFrame:GetCanvasContainer()
+        local aLeft  = anchor:GetLeft()
+        local cLeft  = container and container:GetLeft()
+        local cRight = container and container:GetRight()
+        if aLeft and cLeft and cRight then
+            flipLeft = aLeft > (cLeft + cRight) / 2
+        end
+    end
+    if not flipLeft then
+        local right = anchor:GetRight()
+        flipLeft = right and (right + width + 8) > GetScreenWidth()
+    end
+
+    if flipLeft then
         cttipFrame:SetPoint("TOPRIGHT", anchor, "TOPLEFT", -4, 0)
     else
         cttipFrame:SetPoint("TOPLEFT", anchor, "TOPRIGHT", 4, 0)

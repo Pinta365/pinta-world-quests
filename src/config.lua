@@ -24,7 +24,9 @@ AddonTable.defaultSettings = {
     alertChannel   = "Master",  -- Audio channel for alert sound
     alertScope     = "filter",  -- "all" = every cached WQ; "filter" = current expansion only
     alerted        = {},        -- { [questID] = expiresAt } — persists across reloads
-    rewardFilter   = {},        -- { [categoryKey] = true } — true = hidden
+    rewardFilter        = {},   -- { [categoryKey] = true } — true = hidden
+    mapOverlayMovable   = false, -- Whether the map overlay can be dragged to a custom position
+    mapOverlayPositions = {},   -- { [mapID] = {x, y} } saved TOPLEFT offsets per map
 }
 
 -- Initialize saved variables

@@ -1190,7 +1190,8 @@ local MAP_ROW_HEIGHT          = 24
 local MAP_HEADER_H            = 20
 local MAP_MAX_ROWS            = 15
 
-local mapRowPool = {}
+local mapRowPool       = {}
+local currentMapPanelID = nil
 
 local function createMapRow(parent)
     local row = CreateFrame("Button", nil, parent)
@@ -1335,9 +1336,52 @@ local function buildMapPanel()
     panel.compactBtn    = compactBtn
     panel.compactBtnBg  = compactBtnBg
 
+    local lockBtn = CreateFrame("Button", nil, panel)
+    lockBtn:SetSize(18, 14)
+    local lockBtnBg = lockBtn:CreateTexture(nil, "BACKGROUND")
+    lockBtnBg:SetAllPoints()
+    lockBtnBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+    local lockBtnHL = lockBtn:CreateTexture(nil, "HIGHLIGHT")
+    lockBtnHL:SetAllPoints()
+    lockBtnHL:SetColorTexture(1, 1, 1, 0.12)
+    local lockBtnLabel = lockBtn:CreateFontString(nil, "overlay", "GameFontNormalTiny")
+    lockBtnLabel:SetAllPoints()
+    lockBtnLabel:SetJustifyH("CENTER")
+
+    local function updateLockBtn()
+        local movable = PintaWorldQuestsDB and PintaWorldQuestsDB.mapOverlayMovable
+        if movable then
+            lockBtnBg:SetColorTexture(0.55, 0.35, 0.10, 0.95)
+            lockBtnLabel:SetText("|cffffcc00M|r")
+        else
+            lockBtnBg:SetColorTexture(0.2, 0.15, 0.28, 0.85)
+            lockBtnLabel:SetText("|cff888888L|r")
+        end
+        if panel.movableCheckboxRef then
+            panel.movableCheckboxRef:SetChecked(movable == true)
+        end
+    end
+    updateLockBtn()
+
+    lockBtn:SetScript("OnClick", function()
+        PintaWorldQuestsDB.mapOverlayMovable = not (PintaWorldQuestsDB.mapOverlayMovable == true)
+        updateLockBtn()
+    end)
+    lockBtn:SetScript("OnEnter", function(self)
+        local movable = PintaWorldQuestsDB and PintaWorldQuestsDB.mapOverlayMovable
+        AddonTable.showButtonTooltip(self, movable
+            and "Overlay movable - drag header to reposition\nClick to lock"
+            or  "Overlay locked\nClick to unlock and allow dragging")
+    end)
+    lockBtn:SetScript("OnLeave", function() AddonTable.cttipHide() end)
+    lockBtn:SetPoint("RIGHT", compactBtn, "LEFT", -2, 0)
+    panel.lockBtn       = lockBtn
+    panel.lockBtnBg     = lockBtnBg
+    panel.updateLockBtn = updateLockBtn
+
     local headerText = panel:CreateFontString(nil, "overlay", "GameFontNormalSmall")
-    headerText:SetPoint("topleft",  panel, "topleft",  6,   -4)
-    headerText:SetPoint("topright", panel, "topright", -70, -4)
+    headerText:SetPoint("topleft", panel, "topleft",  6, -4)
+    headerText:SetPoint("RIGHT",   lockBtn, "LEFT",  -4,  0)
     headerText:SetWordWrap(false)
     panel.headerText = headerText
 
@@ -1352,6 +1396,39 @@ local function buildMapPanel()
     content:SetPoint("topright", panel, "topright", -4, -MAP_HEADER_H)
     content:SetHeight(MAP_ROW_HEIGHT)
     panel.content = content
+
+    panel:SetMovable(true)
+    panel:SetClampedToScreen(true)
+
+    local dragArea = CreateFrame("Frame", nil, panel)
+    dragArea:SetPoint("TOPLEFT",  panel, "TOPLEFT",  0, 0)
+    dragArea:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 0, 0)
+    dragArea:SetHeight(MAP_HEADER_H)
+    dragArea:EnableMouse(true)
+    dragArea:RegisterForDrag("LeftButton")
+    dragArea:SetFrameLevel(panel:GetFrameLevel())
+
+    dragArea:SetScript("OnDragStart", function()
+        if PintaWorldQuestsDB and PintaWorldQuestsDB.mapOverlayMovable then
+            panel:StartMoving()
+        end
+    end)
+    dragArea:SetScript("OnDragStop", function()
+        panel:StopMovingOrSizing()
+        if not (PintaWorldQuestsDB and PintaWorldQuestsDB.mapOverlayMovable) then return end
+        local container = WorldMapFrame:GetCanvasContainer()
+        local x = panel:GetLeft() - container:GetLeft()
+        local y = panel:GetTop()  - container:GetTop()
+        local mapID = WorldMapFrame and WorldMapFrame:GetMapID()
+        if mapID and x and y then
+            if not PintaWorldQuestsDB.mapOverlayPositions then
+                PintaWorldQuestsDB.mapOverlayPositions = {}
+            end
+            PintaWorldQuestsDB.mapOverlayPositions[mapID] = { x = x, y = y }
+            panel:ClearAllPoints()
+            panel:SetPoint("TOPLEFT", container, "TOPLEFT", x, y)
+        end
+    end)
 
     panel:Hide()
     AddonTable.mapPanel = panel
@@ -1376,6 +1453,31 @@ function AddonTable.applyMapPanelSide()
         else
             panel.backgroundTexture:SetGradient("HORIZONTAL", dark, mid)
         end
+    end
+end
+
+local function applyPanelPosition(mapID)
+    local panel = AddonTable.mapPanel
+    if not panel then return end
+    local container = WorldMapFrame:GetCanvasContainer()
+    local saved = mapID
+        and PintaWorldQuestsDB.mapOverlayPositions
+        and PintaWorldQuestsDB.mapOverlayPositions[mapID]
+    if saved then
+        panel:ClearAllPoints()
+        panel:SetPoint("TOPLEFT", container, "TOPLEFT", saved.x, saved.y)
+        if panel.backgroundTexture then
+            local dark = CreateColor(0, 0, 0, 1)
+            local mid  = CreateColor(0, 0, 0, 0.25)
+            local cw   = container:GetWidth() or 600
+            if saved.x > cw / 2 then
+                panel.backgroundTexture:SetGradient("HORIZONTAL", mid, dark)
+            else
+                panel.backgroundTexture:SetGradient("HORIZONTAL", dark, mid)
+            end
+        end
+    else
+        AddonTable.applyMapPanelSide()
     end
 end
 
@@ -1414,6 +1516,13 @@ function AddonTable.refreshMapPanel(mapID)
 
     if #quests == 0 then panel:Hide(); return end
 
+    if mapID ~= currentMapPanelID then
+        currentMapPanelID = mapID
+        applyPanelPosition(mapID)
+    end
+
+    if panel.updateLockBtn then panel.updateLockBtn() end
+
     table.sort(quests, function(a, b)
         return (a.currentTimeLeft or 0) < (b.currentTimeLeft or 0)
     end)
@@ -1442,6 +1551,11 @@ function AddonTable.refreshMapPanel(mapID)
         panel.listBtn:SetPoint("LEFT", panel.compactBtn, "RIGHT", 2, 0)
         panel.optBtn:ClearAllPoints()
         panel.optBtn:SetPoint("LEFT", panel.listBtn, "RIGHT", 2, 0)
+        if panel.lockBtn then
+            panel.lockBtn:ClearAllPoints()
+            panel.lockBtn:SetPoint("LEFT", panel.optBtn, "RIGHT", 2, 0)
+            panel.lockBtn:Show()
+        end
         local totalH = MAP_HEADER_H + shown * mapRowH + 4
         panel:SetHeight(totalH)
         panel.content:SetHeight(shown * mapRowH)
@@ -1457,6 +1571,11 @@ function AddonTable.refreshMapPanel(mapID)
         panel.listBtn:SetPoint("RIGHT", panel.optBtn, "LEFT", -2, 0)
         panel.compactBtn:ClearAllPoints()
         panel.compactBtn:SetPoint("RIGHT", panel.listBtn, "LEFT", -2, 0)
+        if panel.lockBtn then
+            panel.lockBtn:ClearAllPoints()
+            panel.lockBtn:SetPoint("RIGHT", panel.compactBtn, "LEFT", -2, 0)
+            panel.lockBtn:Show()
+        end
         local mapInfo  = C_Map.GetMapInfo(mapID)
         local zoneName = mapInfo and mapInfo.name or ""
         panel.headerText:SetFormattedText(
