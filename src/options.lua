@@ -7,8 +7,8 @@ local addonName, AddonTable = ...
 -- ---------------------------------------------------------------------------
 
 local INDENT = 16
-local SECTION_GAP = 14  -- gap above section header
-local AFTER_HEADER = 8  -- gap below section header before first control
+local SECTION_GAP = 8  -- gap above section header
+local AFTER_HEADER = 10  -- gap below section header before first control
 local ROW_CHECK = 28
 local ROW_SLIDER = 58
 
@@ -91,7 +91,7 @@ local function initOptionsPanel()
     header:SetPoint("TOPLEFT", INDENT, -INDENT)
     header:SetText("Pinta World Quests")
 
-    local y = -46
+    local y = -35
 
     -- -----------------------------------------------------------------------
     -- Section: Display
@@ -147,13 +147,25 @@ local function initOptionsPanel()
     -- -----------------------------------------------------------------------
     y = sectionHeader(panel, "Map panel", y - SECTION_GAP)
 
-    local rightSideCb
-    rightSideCb, y = checkbox(panel, "Show on right side of map", y)
-    rightSideCb:SetScript("OnClick", function(self)
-        PintaWorldQuestsDB.mapPanelSide = self:GetChecked() and "right" or "left"
+    local movableCb
+    movableCb, y = checkbox(panel, "Movable map overlay (drag to reposition per map)", y)
+    movableCb:SetScript("OnClick", function(self)
+        PintaWorldQuestsDB.mapOverlayMovable = self:GetChecked()
+        local mp = AddonTable.mapPanel
+        if mp and mp.updateLockBtn then mp.updateLockBtn() end
+        if mp then mp.movableCheckboxRef = self end
+    end)
+    panel.movableCheckbox = movableCb
+
+    local resetPosBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    resetPosBtn:SetSize(160, 22)
+    resetPosBtn:SetPoint("TOPLEFT", INDENT, y)
+    resetPosBtn:SetText("Reset Overlay Positions")
+    resetPosBtn:SetScript("OnClick", function()
+        PintaWorldQuestsDB.mapOverlayPositions = {}
         if AddonTable.applyMapPanelSide then AddonTable.applyMapPanelSide() end
     end)
-    panel.rightSideCheckbox = rightSideCb
+    y = y - 28
 
     -- -----------------------------------------------------------------------
     -- Section: Expiry alerts  (two-column layout)
@@ -335,6 +347,9 @@ local function initOptionsPanel()
     resetBtn:SetScript("OnClick", function()
         StaticPopup_Show("PINTAWQ_RESET_CONFIRM")
     end)
+    y = y - 30
+
+    panel:SetHeight(-y + 20)
 
     -- -----------------------------------------------------------------------
     -- Refresh
@@ -344,7 +359,9 @@ local function initOptionsPanel()
         compactCb:SetChecked(PintaWorldQuestsDB.compactMode == true)
         extTooltipCb:SetChecked(PintaWorldQuestsDB.extendedTooltips == true)
         skinPinsCb:SetChecked(PintaWorldQuestsDB.skinQuestPins ~= false)
-        rightSideCb:SetChecked(PintaWorldQuestsDB.mapPanelSide == "right")
+        movableCb:SetChecked(PintaWorldQuestsDB.mapOverlayMovable == true)
+        local mp = AddonTable.mapPanel
+        if mp then mp.movableCheckboxRef = movableCb end
 
         local scale = (PintaWorldQuestsDB.listScale or 1.0) * 100
         scaleSl:SetValue(scale)
