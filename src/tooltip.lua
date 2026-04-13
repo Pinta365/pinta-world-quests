@@ -102,6 +102,52 @@ local function cttipLine(text, r, g, b)
     cttipY = cttipY + CTTIP_LINE_H + 2
 end
 
+local function cttipAddItemStats(link)
+    local stats = link and C_Item and C_Item.GetItemStats and C_Item.GetItemStats(link)
+    if not stats then return end
+
+    local statList = {}
+    for statKey, val in pairs(stats) do
+        statList[#statList + 1] = { key = statKey, val = val }
+    end
+    table.sort(statList, function(a, b)
+        local pa = STAT_PRIORITY[a.key] or 99
+        local pb = STAT_PRIORITY[b.key] or 99
+        if pa ~= pb then return pa < pb end
+        return a.key < b.key
+    end)
+
+    for _, s in ipairs(statList) do
+        local label = _G[s.key] or s.key
+        cttipLine("+" .. math.floor(s.val + 0.5) .. " " .. label, 0.0, 0.8, 0.1)
+    end
+end
+
+local function cttipAddRewardMetaLines(questID, maxLines)
+    if not C_TooltipInfo or not C_TooltipInfo.GetQuestLogItem then return end
+
+    local tip = C_TooltipInfo.GetQuestLogItem("reward", 1, questID)
+    local lines = tip and tip.lines
+    if not lines then return end
+
+    local shown = 0
+    for _, line in ipairs(lines) do
+        local text = line.leftText
+        if text and text ~= "" and
+           text ~= RETRIEVING_DATA and
+           not text:find("^Item Level") and
+           not text:find("^Sell Price") then
+            local isMeta = text:find("^Upgrade Level") or text:find("^Binds ") or text:find("^Unique")
+            if isMeta then
+                local lc = line.leftColor
+                cttipLine(text, (lc and lc.r) or 0.7, (lc and lc.g) or 0.7, (lc and lc.b) or 0.7)
+                shown = shown + 1
+                if shown >= (maxLines or 2) then break end
+            end
+        end
+    end
+end
+
 local function cttipShow(anchor, width)
     cttipEnsure()
     width = width or CTTIP_W
@@ -327,23 +373,7 @@ local function showRowTooltip(row)
                             end
                         end
                     end
-                    local stats = link and C_Item and C_Item.GetItemStats and C_Item.GetItemStats(link)
-                    if stats then
-                        local statList = {}
-                        for statKey, val in pairs(stats) do
-                            statList[#statList + 1] = { key = statKey, val = val }
-                        end
-                        table.sort(statList, function(a, b)
-                            local pa = STAT_PRIORITY[a.key] or 99
-                            local pb = STAT_PRIORITY[b.key] or 99
-                            if pa ~= pb then return pa < pb end
-                            return a.key < b.key
-                        end)
-                        for _, s in ipairs(statList) do
-                            local label = _G[s.key] or s.key
-                            cttipLine("+" .. math.floor(s.val + 0.5) .. " " .. label, 0.0, 0.8, 0.1)
-                        end
-                    end
+                    cttipAddItemStats(link)
                 end
             end
 
@@ -384,6 +414,8 @@ local function showRowTooltip(row)
                     end
                     local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", 1, entry.questID)
                     if link then
+                        cttipAddItemStats(link)
+                        cttipAddRewardMetaLines(entry.questID, 2)
                         local _, _, _, _, _, _, _, _, equipSlot = C_Item.GetItemInfo(link)
                         if equipSlot and equipSlot ~= "" and SLOT_IDS[equipSlot] then
                             if IsShiftKeyDown() then
