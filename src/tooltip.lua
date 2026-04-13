@@ -27,10 +27,36 @@ local CTTIP_LINE_H = 16
 local CTTIP_PAD_X  = 10
 local CTTIP_PAD_Y  = 8
 
+-- Maps equipSlot strings to inventory slot ID(s). Rings/trinkets list both.
+local SLOT_IDS = {
+    INVTYPE_HEAD            = { 1 },
+    INVTYPE_NECK            = { 2 },
+    INVTYPE_SHOULDER        = { 3 },
+    INVTYPE_CHEST           = { 5 },
+    INVTYPE_ROBE            = { 5 },
+    INVTYPE_WAIST           = { 6 },
+    INVTYPE_LEGS            = { 7 },
+    INVTYPE_FEET            = { 8 },
+    INVTYPE_WRIST           = { 9 },
+    INVTYPE_HAND            = { 10 },
+    INVTYPE_FINGER          = { 11, 12 },
+    INVTYPE_TRINKET         = { 13, 14 },
+    INVTYPE_CLOAK           = { 15 },
+    INVTYPE_WEAPON          = { 16 },
+    INVTYPE_2HWEAPON        = { 16 },
+    INVTYPE_WEAPONMAINHAND  = { 16 },
+    INVTYPE_SHIELD          = { 17 },
+    INVTYPE_WEAPONOFFHAND   = { 17 },
+    INVTYPE_HOLDABLE        = { 17 },
+    INVTYPE_RANGED          = { 18 },
+    INVTYPE_RANGEDRIGHT     = { 18 },
+}
+
 local cttipFrame
 local cttipFonts  = {}
 local cttipN      = 0
 local cttipY      = 0
+local cttipFlipLeft = false
 
 local function cttipEnsure()
     if cttipFrame then return end
@@ -100,6 +126,7 @@ local function cttipShow(anchor, width)
         flipLeft = right and (right + width + 8) > GetScreenWidth()
     end
 
+    cttipFlipLeft = flipLeft
     if flipLeft then
         cttipFrame:SetPoint("TOPRIGHT", anchor, "TOPLEFT", -4, 0)
     else
@@ -108,8 +135,129 @@ local function cttipShow(anchor, width)
     cttipFrame:Show()
 end
 
+local function hideCompareTooltip()
+    if ShoppingTooltip1 and ShoppingTooltip1:IsShown() and
+       ShoppingTooltip1:GetOwner() == cttipFrame then
+        ShoppingTooltip1:Hide()
+    end
+    if ShoppingTooltip2 then ShoppingTooltip2:Hide() end
+end
+
+local function showCompareTooltip(itemLink)
+    if not itemLink or not ShoppingTooltip1 then return end
+    local _, _, _, _, _, _, _, _, equipSlot = C_Item.GetItemInfo(itemLink)
+    if not equipSlot or equipSlot == "" then return end
+    local slots = SLOT_IDS[equipSlot]
+    if not slots then return end
+
+    cttipEnsure()
+    hideCompareTooltip()
+
+    local compareInfo
+    if C_TooltipComparison and C_TooltipComparison.GetItemComparisonInfo then
+        compareInfo = C_TooltipComparison.GetItemComparisonInfo({ hyperlink = itemLink })
+    end
+
+    local function setTooltipFromItem(tooltip, item)
+        if not item then return false end
+
+        tooltip:ClearLines()
+        if item.hyperlink and item.hyperlink ~= "" then
+            tooltip:SetHyperlink(item.hyperlink)
+            return true
+        end
+
+        if item.guid and C_TooltipInfo and C_TooltipInfo.GetItemByGUID then
+            local data = C_TooltipInfo.GetItemByGUID(item.guid)
+            if data then
+                tooltip:ProcessInfo({ tooltipData = data, append = true })
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local primaryShown, secondaryShown = false, false
+    local headerPadding = 30
+
+    if compareInfo and compareInfo.item then
+        ShoppingTooltip1:SetOwner(cttipFrame, "ANCHOR_NONE")
+        primaryShown = setTooltipFromItem(ShoppingTooltip1, compareInfo.item)
+        if primaryShown then
+            ShoppingTooltip1.CompareHeader:Show()
+            ShoppingTooltip1.CompareHeader.Label:SetText(EQUIPPED)
+            ShoppingTooltip1.CompareHeader:SetWidth(ShoppingTooltip1.CompareHeader.Label:GetWidth() + headerPadding)
+            ShoppingTooltip1:Show()
+        end
+
+        local secondaryItem = compareInfo.additionalItems and compareInfo.additionalItems[1]
+        if secondaryItem and ShoppingTooltip2 then
+            ShoppingTooltip2:SetOwner(cttipFrame, "ANCHOR_NONE")
+            secondaryShown = setTooltipFromItem(ShoppingTooltip2, secondaryItem)
+            if secondaryShown then
+                ShoppingTooltip2.CompareHeader:Show()
+                ShoppingTooltip2.CompareHeader.Label:SetText(EQUIPPED)
+                ShoppingTooltip2.CompareHeader:SetWidth(ShoppingTooltip2.CompareHeader.Label:GetWidth() + headerPadding)
+                ShoppingTooltip2:Show()
+            end
+        end
+    end
+
+    -- Fallback path if comparison info is unavailable.
+    if not primaryShown then
+        local slotID = slots[1]
+        if slots[2] then
+            local link1 = GetInventoryItemLink("player", slots[1])
+            local link2 = GetInventoryItemLink("player", slots[2])
+            if not link1 then
+                slotID = slots[1]
+            elseif not link2 then
+                slotID = slots[2]
+            else
+                local ilvl1 = link1 and select(1, C_Item.GetDetailedItemLevelInfo(link1)) or 0
+                local ilvl2 = link2 and select(1, C_Item.GetDetailedItemLevelInfo(link2)) or 0
+                slotID = (ilvl1 <= ilvl2) and slots[1] or slots[2]
+            end
+        end
+
+        local equippedLink = GetInventoryItemLink("player", slotID)
+        if not equippedLink then return end
+
+        ShoppingTooltip1:SetOwner(cttipFrame, "ANCHOR_NONE")
+        ShoppingTooltip1:ClearAllPoints()
+        if cttipFlipLeft then
+            ShoppingTooltip1:SetPoint("TOPRIGHT", cttipFrame, "TOPLEFT", -4, 0)
+        else
+            ShoppingTooltip1:SetPoint("TOPLEFT", cttipFrame, "TOPRIGHT", 4, 0)
+        end
+        ShoppingTooltip1:SetInventoryItem("player", slotID)
+        ShoppingTooltip1:Show()
+        return
+    end
+
+    ShoppingTooltip1:ClearAllPoints()
+    if secondaryShown then
+        ShoppingTooltip2:ClearAllPoints()
+        if cttipFlipLeft then
+            ShoppingTooltip1:SetPoint("TOPRIGHT", cttipFrame, "TOPLEFT", -4, 0)
+            ShoppingTooltip2:SetPoint("TOPRIGHT", ShoppingTooltip1, "TOPLEFT", -4, 0)
+        else
+            ShoppingTooltip1:SetPoint("TOPLEFT", cttipFrame, "TOPRIGHT", 4, 0)
+            ShoppingTooltip2:SetPoint("TOPLEFT", ShoppingTooltip1, "TOPRIGHT", 4, 0)
+        end
+    else
+        if cttipFlipLeft then
+            ShoppingTooltip1:SetPoint("TOPRIGHT", cttipFrame, "TOPLEFT", -4, 0)
+        else
+            ShoppingTooltip1:SetPoint("TOPLEFT", cttipFrame, "TOPRIGHT", 4, 0)
+        end
+    end
+end
+
 local function cttipHide()
     if cttipFrame then cttipFrame:Hide() end
+    hideCompareTooltip()
 end
 
 -- Row tooltip
@@ -120,8 +268,10 @@ local function showRowTooltip(row)
     if not entry then return end
 
     local extended = PintaWorldQuestsDB and PintaWorldQuestsDB.extendedTooltips
+    local compareLink
 
     cttipReset()
+    hideCompareTooltip()
 
     local r = entry.stripeR or 0.9
     local g = entry.stripeG or 0.9
@@ -167,6 +317,16 @@ local function showRowTooltip(row)
                         cttipLine("Item Level " .. itemLevel, 1, 1, 1)
                     end
                     local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", 1, entry.questID)
+                    if link then
+                        local _, _, _, _, _, _, _, _, equipSlot = C_Item.GetItemInfo(link)
+                        if equipSlot and equipSlot ~= "" and SLOT_IDS[equipSlot] then
+                            if IsShiftKeyDown() then
+                                compareLink = link
+                            else
+                                cttipLine("Hold Shift to compare equipped", 0.4, 0.4, 0.4)
+                            end
+                        end
+                    end
                     local stats = link and C_Item and C_Item.GetItemStats and C_Item.GetItemStats(link)
                     if stats then
                         local statList = {}
@@ -222,6 +382,17 @@ local function showRowTooltip(row)
                     if detail ~= "" then
                         cttipLine(detail, 0.55, 0.55, 0.55)
                     end
+                    local link = GetQuestLogItemLink and GetQuestLogItemLink("reward", 1, entry.questID)
+                    if link then
+                        local _, _, _, _, _, _, _, _, equipSlot = C_Item.GetItemInfo(link)
+                        if equipSlot and equipSlot ~= "" and SLOT_IDS[equipSlot] then
+                            if IsShiftKeyDown() then
+                                compareLink = link
+                            else
+                                cttipLine("Hold Shift to compare equipped", 0.4, 0.4, 0.4)
+                            end
+                        end
+                    end
                 end
             end
             local currencies = C_QuestInfoSystem.GetQuestRewardCurrencies(entry.questID)
@@ -261,6 +432,7 @@ local function showRowTooltip(row)
     end
 
     cttipShow(row)
+    if compareLink then showCompareTooltip(compareLink) end
 end
 
 local function showButtonTooltip(anchor, text)

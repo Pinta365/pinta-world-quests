@@ -91,7 +91,10 @@ end
 
 -- Row interaction
 
+local currentHoveredRow = nil
+
 local function rowOnEnter(self)
+    currentHoveredRow = self
     AddonTable.showRowTooltip(self)
     if self.questID and not InCombatLockdown() then
         self._prevSuperTrack = C_SuperTrack.GetSuperTrackedQuestID()
@@ -100,6 +103,7 @@ local function rowOnEnter(self)
 end
 
 local function rowOnLeave(self)
+    currentHoveredRow = nil
     AddonTable.cttipHide()
     if self._prevSuperTrack ~= nil and not InCombatLockdown() then
         C_SuperTrack.SetSuperTrackedQuestID(self._prevSuperTrack)
@@ -1039,7 +1043,9 @@ end
 function AddonTable.refreshList()
     local content = AddonTable.listContent
     if not content then return end
-    AddonTable.cttipHide()
+    if not currentHoveredRow then
+        AddonTable.cttipHide()
+    end
 
     local now         = GetServerTime()
     local sortMode    = PintaWorldQuestsDB and PintaWorldQuestsDB.sortMode or "zone"
@@ -1178,6 +1184,15 @@ function AddonTable.refreshList()
 
     for i = rowIdx + 1, #rowPool    do rowPool[i]:Hide()    end
     for i = hdrIdx + 1, #headerPool do headerPool[i]:Hide() end
+
+    if currentHoveredRow then
+        if currentHoveredRow:IsShown() and currentHoveredRow:IsMouseOver() and currentHoveredRow.questID then
+            AddonTable.showRowTooltip(currentHoveredRow)
+        else
+            currentHoveredRow = nil
+            AddonTable.cttipHide()
+        end
+    end
 
     if AddonTable.updateThumb then AddonTable.updateThumb() end
 end
@@ -1494,7 +1509,9 @@ end
 function AddonTable.refreshMapPanel(mapID)
     local panel = AddonTable.mapPanel
     if not panel then return end
-    AddonTable.cttipHide()
+    if not currentHoveredRow then
+        AddonTable.cttipHide()
+    end
 
     mapID = mapID or (WorldMapFrame and WorldMapFrame:GetMapID())
     if not mapID then panel:Hide(); return end
@@ -1601,6 +1618,15 @@ function AddonTable.refreshMapPanel(mapID)
     for i = shown + 1, #mapRowPool do mapRowPool[i]:Hide() end
 
     panel:Show()
+
+    if currentHoveredRow then
+        if currentHoveredRow:IsShown() and currentHoveredRow:IsMouseOver() and currentHoveredRow.questID then
+            AddonTable.showRowTooltip(currentHoveredRow)
+        else
+            currentHoveredRow = nil
+            AddonTable.cttipHide()
+        end
+    end
 end
 
 -- Public: init
@@ -1672,6 +1698,15 @@ function AddonTable.initUI()
         local mapID = self:GetMapID()
         AddonTable.scanMap(mapID)
         AddonTable.refreshMapPanel(mapID)
+    end)
+
+    -- Refresh tooltip when Shift is pressed/released while hovering a row.
+    local modFrame = CreateFrame("Frame")
+    modFrame:RegisterEvent("MODIFIER_STATE_CHANGED")
+    modFrame:SetScript("OnEvent", function(_, _, key, _)
+        if (key == "LSHIFT" or key == "RSHIFT") and currentHoveredRow then
+            AddonTable.showRowTooltip(currentHoveredRow)
+        end
     end)
 
     AddonTable.initCommands()
