@@ -5,3 +5,4 @@ ignore:
   - README.md
   - .pkgmeta
   - references
+  - deno.json
