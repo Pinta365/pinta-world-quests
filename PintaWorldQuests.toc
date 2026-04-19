@@ -3,7 +3,7 @@
 ## Title: |cff45D388Pinta World Quests|r
 ## Notes: World quest tracker with time remaining, reward info, and map overlay.
 ## Author: Pinta365@Github
-## Version: 0.0.11
+## Version: 0.0.12
 ## SavedVariables: PintaWorldQuestsDB
 ## X-Curse-Project-ID: 1476738
 ## X-Wago-ID: EGPe7ON1
